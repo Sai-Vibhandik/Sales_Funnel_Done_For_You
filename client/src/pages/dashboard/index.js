@@ -1,0 +1,10 @@
+export { default as DashboardPage } from './DashboardPage';
+export { default as AdminDashboardPage } from './AdminDashboardPage';
+export { default as GraphicDesignerDashboard } from './GraphicDesignerDashboard';
+export { default as UIDesignerDashboard } from './UIDesignerDashboard';
+export { default as DeveloperDashboard } from './DeveloperDashboard';
+export { default as TesterDashboard } from './TesterDashboard';
+export { default as ContentWriterDashboard } from './ContentWriterDashboard';
+export { default as VideoEditorDashboard } from './VideoEditorDashboard';
+export { default as PerformanceMarketerDashboard } from './PerformanceMarketerDashboard';
+export { default as TeamMemberDashboard } from './TeamMemberDashboard';

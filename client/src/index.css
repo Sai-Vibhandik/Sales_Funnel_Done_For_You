@@ -1,0 +1,441 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+}
+
+@layer components {
+  /* Button styles */
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 font-medium rounded-xl transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply bg-primary-500 text-dark-300 hover:bg-primary-600 active:bg-primary-700;
+    box-shadow: 0 1px 2px 0 rgba(255, 193, 7, 0.25);
+  }
+
+  .btn-secondary {
+    @apply bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300;
+  }
+
+  .btn-dark {
+    @apply bg-dark-300 text-white hover:bg-dark-200 active:bg-dark-100;
+  }
+
+  /* Card styles */
+  .card {
+    @apply bg-white rounded-2xl border border-gray-100;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  }
+
+  .card-hover {
+    @apply transition-all duration-200;
+  }
+
+  .card-hover:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    @apply border-gray-200;
+  }
+
+  /* Sidebar styles */
+  .sidebar {
+    @apply bg-dark-300 text-white;
+    box-shadow: 4px 0 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 transition-all duration-200;
+  }
+
+  .sidebar-item:hover {
+    @apply bg-dark-200 text-white;
+  }
+
+  .sidebar-item.active {
+    @apply bg-primary-500/10 text-primary-500 font-medium;
+    box-shadow: inset 3px 0 0 0 #FFC107;
+  }
+
+  .sidebar-item.active:hover {
+    @apply bg-primary-500/20;
+  }
+
+  /* Input styles */
+  .input {
+    @apply block w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500;
+    @apply transition-all duration-200;
+  }
+
+  .input-dark {
+    @apply bg-dark-300 border-dark-200 text-white placeholder-gray-500;
+    @apply focus:ring-primary-500/30 focus:border-primary-500;
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    @apply h-2 bg-gray-100 rounded-full overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full rounded-full transition-all duration-500 ease-out;
+    background: linear-gradient(90deg, #FFC107 0%, #FFD54F 100%);
+  }
+
+  /* Badge styles */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply bg-primary-100 text-primary-700;
+  }
+
+  .badge-success {
+    @apply bg-green-100 text-green-700;
+  }
+
+  .badge-warning {
+    @apply bg-yellow-100 text-yellow-700;
+  }
+
+  .badge-danger {
+    @apply bg-red-100 text-red-700;
+  }
+
+  .badge-dark {
+    @apply bg-dark-100 text-gray-300;
+  }
+
+  /* Stat card */
+  .stat-card {
+    @apply relative overflow-hidden bg-white rounded-2xl p-4 sm:p-6 border border-gray-100;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 120px;
+    height: 120px;
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.05) 0%, transparent 70%);
+    border-radius: 0 16px 0 0;
+  }
+
+  /* Chart container */
+  .chart-container {
+    @apply bg-white rounded-2xl p-4 sm:p-6 border border-gray-100;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Notification dot */
+  .notification-dot {
+    @apply absolute -top-1 -right-1 w-2.5 h-2.5 bg-primary-500 rounded-full border-2 border-white;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full hover:bg-gray-400;
+}
+
+/* Dark sidebar scrollbar */
+.dark-sidebar::-webkit-scrollbar-track {
+  @apply bg-dark-200;
+}
+
+.dark-sidebar::-webkit-scrollbar-thumb {
+  @apply bg-dark-100 rounded-full hover:bg-gray-600;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-slideIn {
+  animation: slideIn 0.2s ease-out forwards;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #FFC107 0%, #FF8F00 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Yellow glow effect */
+.yellow-glow {
+  box-shadow: 0 0 20px rgba(255, 193, 7, 0.3);
+}
+
+/* Enhanced Card Styles with Shadows - Responsive padding */
+.enhanced-card {
+  @apply bg-white rounded-2xl border border-gray-100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+.enhanced-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+/* Enhanced Stat Card with Icon - Responsive */
+.stat-card-enhanced {
+  @apply relative overflow-hidden bg-white rounded-2xl p-4 sm:p-6 border border-gray-100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+@media (min-width: 640px) {
+  .stat-card-enhanced:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  }
+}
+
+/* Role Icon Container */
+.role-icon-container {
+  @apply w-10 h-10 rounded-xl flex items-center justify-center;
+  transition: transform 0.2s ease;
+}
+
+.role-icon-container:hover {
+  transform: scale(1.05);
+}
+
+/* Kanban Column Styles - Responsive */
+.kanban-column {
+  @apply bg-gray-50 rounded-2xl p-3 sm:p-4 min-h-[300px] sm:min-h-[500px];
+  transition: all 0.2s ease;
+}
+
+.kanban-column-header {
+  @apply font-semibold text-gray-700 mb-3 sm:mb-4 flex items-center gap-2 text-sm sm:text-base;
+}
+
+/* Kanban Card - Responsive */
+.kanban-card {
+  @apply bg-white rounded-xl p-3 sm:p-4 mb-2 sm:mb-3 border border-gray-100 cursor-pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: all 0.2s ease;
+}
+
+.kanban-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Chart Container Enhanced - Responsive */
+.chart-container-enhanced {
+  @apply bg-white rounded-2xl p-4 sm:p-6 border border-gray-100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+.chart-container-enhanced:hover {
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Team Member Card Enhanced - Responsive */
+.team-member-card-enhanced {
+  @apply p-3 sm:p-4 bg-white rounded-xl border border-gray-100 cursor-pointer;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+.team-member-card-enhanced:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  border-color: rgba(255, 193, 7, 0.3);
+}
+
+/* Project Card Enhanced - Responsive */
+.project-card-enhanced {
+  @apply p-3 sm:p-4 bg-white rounded-xl border border-gray-100 cursor-pointer;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+@media (min-width: 640px) {
+  .project-card-enhanced:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    border-color: rgba(255, 193, 7, 0.3);
+  }
+}
+
+/* Icon Badge */
+.icon-badge {
+  @apply p-2 rounded-xl;
+}
+
+.icon-badge-primary {
+  @apply bg-primary-100 text-primary-600;
+}
+
+.icon-badge-success {
+  @apply bg-green-100 text-green-600;
+}
+
+.icon-badge-info {
+  @apply bg-blue-100 text-blue-600;
+}
+
+.icon-badge-purple {
+  @apply bg-purple-100 text-purple-600;
+}
+
+.icon-badge-pink {
+  @apply bg-pink-100 text-pink-600;
+}
+
+.icon-badge-orange {
+  @apply bg-orange-100 text-orange-600;
+}
+
+.icon-badge-cyan {
+  @apply bg-cyan-100 text-cyan-600;
+}
+
+.icon-badge-emerald {
+  @apply bg-emerald-100 text-emerald-600;
+}
+
+/* Task Card Styles for Designer Dashboard - Responsive */
+.task-card-enhanced {
+  @apply bg-white rounded-xl p-3 sm:p-4 border border-gray-100 cursor-pointer;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+.task-card-enhanced:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  border-color: rgba(236, 72, 153, 0.3);
+}
+
+/* Status Badge Variants */
+.status-pending {
+  @apply bg-yellow-100 text-yellow-700 border border-yellow-200;
+}
+
+.status-submitted {
+  @apply bg-blue-100 text-blue-700 border border-blue-200;
+}
+
+.status-approved {
+  @apply bg-green-100 text-green-700 border border-green-200;
+}
+
+.status-rejected {
+  @apply bg-red-100 text-red-700 border border-red-200;
+}
+
+/* Designer Dashboard Gradient Headers */
+.designer-gradient-header {
+  background: linear-gradient(135deg, #EC4899 0%, #F472B6 100%);
+}
+
+/* Action Card Hover */
+.action-card-button {
+  @apply relative overflow-hidden rounded-2xl p-3 sm:p-4 text-left transition-all duration-200;
+}
+
+.action-card-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.action-card-button:hover::before {
+  opacity: 1;
+}
+
+/* Responsive grid utilities */
+.grid-responsive-cards {
+  @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6;
+}
+
+.grid-responsive-stats {
+  @apply grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6;
+}
+
+.grid-responsive-charts {
+  @apply grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6;
+}
+
+/* Touch-friendly tap targets */
+@media (max-width: 640px) {
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Disable hover effects on touch devices */
+  .enhanced-card:hover,
+  .stat-card-enhanced:hover,
+  .project-card-enhanced:hover,
+  .task-card-enhanced:hover,
+  .kanban-card:hover {
+    transform: none;
+  }
+}
+
+/* Prevent horizontal overflow on mobile */
+.overflow-x-mobile-safe {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.overflow-x-mobile-safe::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile-friendly modal sizing */
+@media (max-width: 640px) {
+  .modal-content {
+    margin: 1rem;
+    max-height: calc(100vh - 2rem);
+  }
+}
+
