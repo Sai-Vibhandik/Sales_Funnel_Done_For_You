@@ -611,6 +611,15 @@ function buildContentBriefPrompt(framework, frameworkTemplate, context) {
     prompt += `\n\n*** END APPROVED CONTENT ***\n`;
   }
 
+  // Brand Guidelines (for UI/UX Designers and Developers)
+  if (context.brandGuidelines && context.brandGuidelines.trim()) {
+    prompt += `\n\n*** BRAND GUIDELINES (MUST FOLLOW) ***\n`;
+    prompt += `====================================\n`;
+    prompt += context.brandGuidelines;
+    prompt += `\n\n*** END BRAND GUIDELINES ***\n`;
+    prompt += `\nIMPORTANT: You must use these brand colors and typography in your design. Do not suggest different colors or fonts.\n`;
+  }
+
   prompt += `\n\nGENERATE THE CONTENT BRIEF NOW using the ${framework} framework structure. Make sure all placeholders are replaced with actual content from the context above.`;
 
   return prompt;

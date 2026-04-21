@@ -207,6 +207,14 @@ export const taskService = {
   uploadFiles: (taskId, formData) => api.post(`/tasks/${taskId}/files`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
+  // Upload custom logo for UI/UX designer
+  uploadCustomLogo: (taskId, formData) => api.post(`/tasks/${taskId}/custom-logo`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  // Delete custom logo
+  deleteCustomLogo: (taskId) => api.delete(`/tasks/${taskId}/custom-logo`),
+  // Save designer brand overrides
+  saveDesignerBrandOverrides: (taskId, data) => api.put(`/tasks/${taskId}/designer-brand`, data),
   // Get pending review tasks (tester)
   getPendingReview: () => api.get('/tasks/pending-review'),
   // Get pending marketer approval
@@ -296,6 +304,39 @@ export const rejectionService = {
   getUserRejectionHistory: (userId, params) => api.get(`/rejections/user/${userId}`, { params }),
   getHighRejectionUsers: (threshold = 3, days = 30) => api.get('/rejections/alerts', { params: { threshold, days } }),
   resolveRejection: (rejectionId) => api.put(`/rejections/${rejectionId}/resolve`),
+};
+
+// Brand Settings service
+export const brandSettingsService = {
+  getBrandSettings: (projectId) => api.get(`/brand-settings/${projectId}`),
+  upsertBrandSettings: (projectId, data) => api.put(`/brand-settings/${projectId}`, data),
+  uploadBrandManual: (projectId, file) => {
+    const formData = new FormData();
+    formData.append('manual', file);
+    return api.post(`/brand-settings/${projectId}/upload-manual`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  uploadLogo: (projectId, file, logoType = 'primary') => {
+    const formData = new FormData();
+    formData.append('logo', file);
+    formData.append('logoType', logoType);
+    return api.post(`/brand-settings/${projectId}/upload-logo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  extractFromManual: (projectId) => api.post(`/brand-settings/${projectId}/extract`),
+  uploadAsset: (projectId, file, description = '') => {
+    const formData = new FormData();
+    formData.append('asset', file);
+    formData.append('description', description);
+    return api.post(`/brand-settings/${projectId}/upload-asset`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  deleteAsset: (projectId, assetId) => api.delete(`/brand-settings/${projectId}/asset/${assetId}`),
+  deleteBrandManual: (projectId) => api.delete(`/brand-settings/${projectId}/manual`),
+  deleteLogo: (projectId, logoType) => api.delete(`/brand-settings/${projectId}/logo/${logoType}`),
 };
 
 export default api;

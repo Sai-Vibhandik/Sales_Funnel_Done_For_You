@@ -11,6 +11,7 @@ import {
   PenTool, Sparkles, Copy, ChevronRight, BookOpen
 } from 'lucide-react';
 import { STATUS_CONFIG, getStatusConfig } from '@/constants/taskStatuses';
+import BrandSettingsView from '@/components/tasks/BrandSettingsView';
 
 const PLATFORM_LABELS = {
   facebook: 'Facebook',
@@ -1454,6 +1455,38 @@ Script: (for video) Opening hook..."
                     </p>
                   </div>
                 )}
+              </CardBody>
+            </Card>
+          )}
+
+          {/* Brand Settings - For UI/UX Designers working on Landing Page Design */}
+          {user?.role === 'ui_ux_designer' && task.taskType === 'landing_page_design' && task.projectId && (
+            <Card>
+              <CardHeader className="bg-gradient-to-r from-pink-50 to-purple-50">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Palette className="w-5 h-5 text-pink-500" />
+                  Brand Guidelines
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Use these brand colors, typography, and logos for your design
+                </p>
+              </CardHeader>
+              <CardBody className="p-6">
+                <BrandSettingsView
+                  projectId={task.projectId._id || task.projectId}
+                  taskId={task._id}
+                  onGeneratePrompt={(brandPrompt) => {
+                    // Append brand guidelines to AI brief if generated
+                    if (aiBrief) {
+                      const newBrief = aiBrief + '\n\n' + brandPrompt;
+                      setAiBrief(newBrief);
+                      toast.success('Brand guidelines added to your brief');
+                    } else {
+                      setAiBrief(brandPrompt);
+                      toast.success('Brand guidelines loaded');
+                    }
+                  }}
+                />
               </CardBody>
             </Card>
           )}

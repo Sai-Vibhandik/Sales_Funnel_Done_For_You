@@ -107,6 +107,7 @@ app.use("/api/billing", billingRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/rejections", protect, setTenantContext, requireOrganization, rejectionRoutes);
+app.use("/api/brand-settings", protect, setTenantContext, requireOrganization, require("./routes/brandSettings"));
 
 // 404 handler
 app.use((req, res) => {

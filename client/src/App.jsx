@@ -20,7 +20,7 @@ import OnboardingPage from '@/pages/onboarding/OnboardingPage';
 import { DashboardPage } from '@/pages/dashboard';
 
 // Projects
-import { ProjectsListPage, CreateProjectPage, ProjectDetailPage, TeamAssignmentPage, ProjectStrategySummaryPage } from '@/pages/projects';
+import { ProjectsListPage, CreateProjectPage, ProjectDetailPage, TeamAssignmentPage, ProjectStrategySummaryPage, ProjectBrandSettingsPage } from '@/pages/projects';
 import ProjectAssetsPage from '@/pages/projects/ProjectAssetsPage';
 
 // Stages
@@ -268,6 +268,7 @@ function AppRoutes() {
         <Route path="projects/:id" element={<ProjectDetailPage />} />
         <Route path="projects/:id/strategy-summary" element={<ProjectStrategySummaryPage />} />
         <Route path="projects/:id/assets" element={<ProjectAssetsPage />} />
+        <Route path="projects/:id/brand-settings" element={<ProjectBrandSettingsPage />} />
 
         {/* Create Project - Admin only */}
         <Route

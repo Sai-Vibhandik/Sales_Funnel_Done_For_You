@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, CardBody, CardHeader, Button, Input, Spinner } from '@/components/ui';
-import { Plus, Edit, Trash2, FileText, X, Users, Code, Palette } from 'lucide-react';
-import { projectService, authService } from '@/services/api';
+import { Plus, Edit, Trash2, FileText, X, Users, Code, Palette, Settings } from 'lucide-react';
+import { projectService, authService, brandSettingsService } from '@/services/api';
 
 const FUNNEL_TYPES = [
   { id: 'video_sales_letter', label: 'Video Sales Letter' },
@@ -32,11 +33,14 @@ const LEAD_CAPTURE_METHODS = [
 ];
 
 export default function LandingPagesSection({ projectId, landingPages = [], onSave, loading, isCompleted, assignedTeam }) {
+  const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null);
   const [saving, setSaving] = useState(false);
   const [designers, setDesigners] = useState([]);
   const [developers, setDevelopers] = useState([]);
+  const [brandSettings, setBrandSettings] = useState(null);
+  const [brandSettingsLoading, setBrandSettingsLoading] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
     funnelType: 'video_sales_letter',
@@ -79,6 +83,32 @@ export default function LandingPagesSection({ projectId, landingPages = [], onSa
       console.log('No assignedTeam prop provided');
     }
   }, [assignedTeam]);
+
+  // Fetch brand settings
+  useEffect(() => {
+    const fetchBrandSettings = async () => {
+      try {
+        setBrandSettingsLoading(true);
+        const response = await brandSettingsService.getBrandSettings(projectId);
+        if (response.data) {
+          setBrandSettings(response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching brand settings:', error);
+      } finally {
+        setBrandSettingsLoading(false);
+      }
+    };
+    fetchBrandSettings();
+  }, [projectId]);
+
+  // Check if brand settings are configured
+  const hasBrandSettings = brandSettings && (
+    (brandSettings.colors && Object.values(brandSettings.colors).some(c => c?.hex)) ||
+    (brandSettings.typography && Object.values(brandSettings.typography).some(t => t?.fontFamily)) ||
+    brandSettings.brandManual?.filePath ||
+    brandSettings.logos?.primary?.filePath
+  );
 
   const resetForm = () => {
     setFormData({
@@ -212,18 +242,53 @@ export default function LandingPagesSection({ projectId, landingPages = [], onSa
             <h2 className="text-lg font-semibold text-gray-900">Landing Pages</h2>
             <p className="text-sm text-gray-500">Create landing page strategies and assign team members for each</p>
           </div>
-          {!showForm && (
-            <Button onClick={handleAddNew} disabled={loading}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Landing Page
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {!showForm && (
+              <>
+                {/* Brand Settings Status & Link */}
+                <Button
+                  variant={hasBrandSettings ? "outline" : "secondary"}
+                  size="sm"
+                  onClick={() => navigate(`/dashboard/projects/${projectId}/brand-settings`)}
+                  className={hasBrandSettings ? "border-green-300 text-green-700 hover:bg-green-50" : "bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100"}
+                >
+                  <Palette className="w-4 h-4 mr-2" />
+                  {hasBrandSettings ? 'Brand Settings ✓' : 'Setup Brand Settings'}
+                </Button>
+                <Button onClick={handleAddNew} disabled={loading}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Landing Page
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardBody className="space-y-4">
         {/* Landing Page Form */}
         {showForm && (
           <div className="border rounded-lg p-4 bg-gray-50 space-y-4">
+            {/* Brand Settings Warning */}
+            {!hasBrandSettings && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Palette className="w-5 h-5 text-amber-600" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-800">Brand settings not configured</p>
+                    <p className="text-xs text-amber-600">Set up brand colors, fonts, and logos for consistent designs</p>
+                  </div>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => navigate(`/dashboard/projects/${projectId}/brand-settings`)}
+                  className="bg-amber-100 hover:bg-amber-200 text-amber-700 border-amber-300"
+                >
+                  Setup Now
+                </Button>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <h3 className="font-medium text-gray-900">
                 {editingIndex !== null ? 'Edit Landing Page' : 'New Landing Page'}

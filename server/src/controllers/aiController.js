@@ -1,5 +1,6 @@
 const Task = require('../models/Task');
 const Prompt = require('../models/Prompt');
+const BrandSettings = require('../models/BrandSettings');
 const { generateContentBrief, checkAIHealth } = require('../services/aiService');
 const { getFrameworkTemplate } = require('../utils/frameworkTemplates');
 
@@ -10,7 +11,7 @@ const getUIDesignerTemplate = () => {
 Analyze the requirements and create a detailed brief covering:
 1. Design Objectives - What the design should achieve
 2. Target User Considerations - User needs, behaviors, expectations
-3. Visual Style Guidelines - Colors, typography, imagery direction
+3. Visual Style Guidelines - Colors, typography, imagery direction (MUST follow brand guidelines if provided)
 4. Layout Recommendations - Structure, hierarchy, key sections
 5. User Experience Flow - Navigation, interactions, micro-animations
 6. Responsive Considerations - Mobile, tablet, desktop adaptations
@@ -18,16 +19,18 @@ Analyze the requirements and create a detailed brief covering:
 8. Technical Constraints - Performance, browser compatibility
 
 Context Information:
-- Project: {projectName}
-- Business: {businessName}
-- Industry: {industry}
-- Task: {taskTitle}
-- Platform: {platform}
-- Funnel Stage: {funnelStage}
-- Target Audience: {targetAudience}
-- Offer: {offer}
+- Project: {{projectName}}
+- Business: {{businessName}}
+- Industry: {{industry}}
+- Task: {{taskTitle}}
+- Platform: {{platform}}
+- Funnel Stage: {{funnelStage}}
+- Target Audience: {{targetAudience}}
+- Offer: {{offer}}
 
-Generate a clear, actionable design brief that the designer can use as a foundation for their creative work.`;
+IMPORTANT: Check the BRAND GUIDELINES section in the context below for required colors and typography. You MUST use these exact brand colors and fonts in your design recommendations.
+
+Generate a clear, actionable design brief that the designer can use as a foundation for their creative work. Pay special attention to the brand guidelines for colors, typography, and visual style.`;
 };
 
 // Default template for Developers (when no framework is needed)
@@ -193,6 +196,114 @@ exports.generateContentBrief = async (req, res, next) => {
       approvedContent: approvedContent || '',
     };
 
+    // Fetch brand settings for UI/UX designers and developers
+    if (isUIDesigner || isDeveloper) {
+      try {
+        // Check if designer has custom overrides
+        const hasDesignerOverrides = task.designerBrandOverrides?.colors?.primary?.hex ||
+                                      task.designerBrandOverrides?.typography?.title?.fontFamily;
+
+        if (hasDesignerOverrides) {
+          // Use designer's custom overrides
+          const brandParts = [];
+
+          // Add designer's custom colors
+          if (task.designerBrandOverrides.colors?.primary?.hex) {
+            brandParts.push(`Primary Color: ${task.designerBrandOverrides.colors.primary.hex}`);
+          }
+          if (task.designerBrandOverrides.colors?.secondary?.hex) {
+            brandParts.push(`Secondary Color: ${task.designerBrandOverrides.colors.secondary.hex}`);
+          }
+          if (task.designerBrandOverrides.colors?.tertiary?.hex) {
+            brandParts.push(`Tertiary Color: ${task.designerBrandOverrides.colors.tertiary.hex}`);
+          }
+
+          // Add designer's custom typography
+          if (task.designerBrandOverrides.typography?.title?.fontFamily) {
+            brandParts.push(`Title Font: ${task.designerBrandOverrides.typography.title.fontFamily}`);
+          }
+          if (task.designerBrandOverrides.typography?.subtitle?.fontFamily) {
+            brandParts.push(`Subtitle Font: ${task.designerBrandOverrides.typography.subtitle.fontFamily}`);
+          }
+          if (task.designerBrandOverrides.typography?.body?.fontFamily) {
+            brandParts.push(`Body Font: ${task.designerBrandOverrides.typography.body.fontFamily}`);
+          }
+
+          // Add selected logo
+          const selectedLogo = task.designerBrandOverrides.selectedLogo || 'brand';
+          if (selectedLogo === 'custom' && task.customLogo?.path) {
+            brandParts.push(`Logo: ${task.customLogo.path} (Designer's Custom Logo)`);
+          } else {
+            // Fetch brand logo
+            const brandSettings = await BrandSettings.findOne({ projectId: task.projectId._id });
+            if (brandSettings?.logos?.primary?.filePath) {
+              brandParts.push(`Logo: ${brandSettings.logos.primary.filePath} (Brand Logo)`);
+            }
+          }
+
+          if (brandParts.length > 0) {
+            context.brandGuidelines = `\nBrand Guidelines (Designer Modified):\n${brandParts.join('\n')}`;
+          }
+        } else {
+          // Use default brand settings
+          const brandSettings = await BrandSettings.findOne({ projectId: task.projectId._id });
+          if (brandSettings) {
+            const brandParts = [];
+
+            // Add colors
+            if (brandSettings.colors?.primary?.hex) {
+              brandParts.push(`Primary Color: ${brandSettings.colors.primary.hex}${brandSettings.colors.primary.name ? ` (${brandSettings.colors.primary.name})` : ''}`);
+            }
+            if (brandSettings.colors?.secondary?.hex) {
+              brandParts.push(`Secondary Color: ${brandSettings.colors.secondary.hex}`);
+            }
+            if (brandSettings.colors?.tertiary?.hex) {
+              brandParts.push(`Tertiary Color: ${brandSettings.colors.tertiary.hex}`);
+            }
+
+            // Add typography
+            if (brandSettings.typography?.title?.fontFamily) {
+              brandParts.push(`Title Font: ${brandSettings.typography.title.fontFamily}`);
+            }
+            if (brandSettings.typography?.subtitle?.fontFamily) {
+              brandParts.push(`Subtitle Font: ${brandSettings.typography.subtitle.fontFamily}`);
+            }
+            if (brandSettings.typography?.body?.fontFamily) {
+              brandParts.push(`Body Font: ${brandSettings.typography.body.fontFamily}`);
+            }
+
+            // Add brand manual link if available
+            if (brandSettings.brandManual?.filePath) {
+              brandParts.push(`Brand Manual: ${brandSettings.brandManual.filePath}`);
+            }
+
+            // Add logos
+            if (brandSettings.logos?.primary?.filePath) {
+              brandParts.push(`Primary Logo: ${brandSettings.logos.primary.filePath}`);
+            }
+            if (brandSettings.logos?.secondary?.filePath) {
+              brandParts.push(`Secondary Logo: ${brandSettings.logos.secondary.filePath}`);
+            }
+            if (brandSettings.logos?.favicon?.filePath) {
+              brandParts.push(`Favicon: ${brandSettings.logos.favicon.filePath}`);
+            }
+
+            // Include custom logo if uploaded
+            if (task.customLogo?.path) {
+              brandParts.push(`Custom Logo: ${task.customLogo.path}`);
+            }
+
+            if (brandParts.length > 0) {
+              context.brandGuidelines = `\nBrand Guidelines:\n${brandParts.join('\n')}`;
+            }
+          }
+        }
+      } catch (brandError) {
+        console.warn('Could not fetch brand settings:', brandError.message);
+        // Continue without brand settings
+      }
+    }
+
     // Generate the content brief
     // Use user's preferred AI provider or default from env
     const aiProvider = req.user?.preferredAIProvider || process.env.AI_PROVIDER || 'ollama';
@@ -355,6 +466,114 @@ exports.regenerateContentBrief = async (req, res, next) => {
       // Approved content from Content Planner (for graphic designers and video editors)
       approvedContent: approvedContent || '',
     };
+
+    // Fetch brand settings for UI/UX designers and developers
+    if (isUIDesigner || isDeveloper) {
+      try {
+        // Check if designer has custom overrides
+        const hasDesignerOverrides = task.designerBrandOverrides?.colors?.primary?.hex ||
+                                      task.designerBrandOverrides?.typography?.title?.fontFamily;
+
+        if (hasDesignerOverrides) {
+          // Use designer's custom overrides
+          const brandParts = [];
+
+          // Add designer's custom colors
+          if (task.designerBrandOverrides.colors?.primary?.hex) {
+            brandParts.push(`Primary Color: ${task.designerBrandOverrides.colors.primary.hex}`);
+          }
+          if (task.designerBrandOverrides.colors?.secondary?.hex) {
+            brandParts.push(`Secondary Color: ${task.designerBrandOverrides.colors.secondary.hex}`);
+          }
+          if (task.designerBrandOverrides.colors?.tertiary?.hex) {
+            brandParts.push(`Tertiary Color: ${task.designerBrandOverrides.colors.tertiary.hex}`);
+          }
+
+          // Add designer's custom typography
+          if (task.designerBrandOverrides.typography?.title?.fontFamily) {
+            brandParts.push(`Title Font: ${task.designerBrandOverrides.typography.title.fontFamily}`);
+          }
+          if (task.designerBrandOverrides.typography?.subtitle?.fontFamily) {
+            brandParts.push(`Subtitle Font: ${task.designerBrandOverrides.typography.subtitle.fontFamily}`);
+          }
+          if (task.designerBrandOverrides.typography?.body?.fontFamily) {
+            brandParts.push(`Body Font: ${task.designerBrandOverrides.typography.body.fontFamily}`);
+          }
+
+          // Add selected logo
+          const selectedLogo = task.designerBrandOverrides.selectedLogo || 'brand';
+          if (selectedLogo === 'custom' && task.customLogo?.path) {
+            brandParts.push(`Logo: ${task.customLogo.path} (Designer's Custom Logo)`);
+          } else {
+            // Fetch brand logo
+            const brandSettings = await BrandSettings.findOne({ projectId: task.projectId._id });
+            if (brandSettings?.logos?.primary?.filePath) {
+              brandParts.push(`Logo: ${brandSettings.logos.primary.filePath} (Brand Logo)`);
+            }
+          }
+
+          if (brandParts.length > 0) {
+            context.brandGuidelines = `\nBrand Guidelines (Designer Modified):\n${brandParts.join('\n')}`;
+          }
+        } else {
+          // Use default brand settings
+          const brandSettings = await BrandSettings.findOne({ projectId: task.projectId._id });
+          if (brandSettings) {
+            const brandParts = [];
+
+            // Add colors
+            if (brandSettings.colors?.primary?.hex) {
+              brandParts.push(`Primary Color: ${brandSettings.colors.primary.hex}${brandSettings.colors.primary.name ? ` (${brandSettings.colors.primary.name})` : ''}`);
+            }
+            if (brandSettings.colors?.secondary?.hex) {
+              brandParts.push(`Secondary Color: ${brandSettings.colors.secondary.hex}`);
+            }
+            if (brandSettings.colors?.tertiary?.hex) {
+              brandParts.push(`Tertiary Color: ${brandSettings.colors.tertiary.hex}`);
+            }
+
+            // Add typography
+            if (brandSettings.typography?.title?.fontFamily) {
+              brandParts.push(`Title Font: ${brandSettings.typography.title.fontFamily}`);
+            }
+            if (brandSettings.typography?.subtitle?.fontFamily) {
+              brandParts.push(`Subtitle Font: ${brandSettings.typography.subtitle.fontFamily}`);
+            }
+            if (brandSettings.typography?.body?.fontFamily) {
+              brandParts.push(`Body Font: ${brandSettings.typography.body.fontFamily}`);
+            }
+
+            // Add brand manual link if available
+            if (brandSettings.brandManual?.filePath) {
+              brandParts.push(`Brand Manual: ${brandSettings.brandManual.filePath}`);
+            }
+
+            // Add logos
+            if (brandSettings.logos?.primary?.filePath) {
+              brandParts.push(`Primary Logo: ${brandSettings.logos.primary.filePath}`);
+            }
+            if (brandSettings.logos?.secondary?.filePath) {
+              brandParts.push(`Secondary Logo: ${brandSettings.logos.secondary.filePath}`);
+            }
+            if (brandSettings.logos?.favicon?.filePath) {
+              brandParts.push(`Favicon: ${brandSettings.logos.favicon.filePath}`);
+            }
+
+            // Include custom logo if uploaded
+            if (task.customLogo?.path) {
+              brandParts.push(`Custom Logo: ${task.customLogo.path}`);
+            }
+
+            if (brandParts.length > 0) {
+              context.brandGuidelines = `\nBrand Guidelines:\n${brandParts.join('\n')}`;
+            }
+          }
+        }
+      } catch (brandError) {
+        console.warn('Could not fetch brand settings:', brandError.message);
+        // Continue without brand settings
+      }
+    }
 
     // Generate new content brief
     // Use user's preferred AI provider or default from env

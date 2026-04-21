@@ -281,6 +281,32 @@ const taskSchema = new mongoose.Schema({
     uploadedAt: { type: Date, default: Date.now }
   }],
 
+  // Custom brand logo for UI/UX designer (optional - if different from project brand settings)
+  customLogo: {
+    name: { type: String },
+    path: { type: String },
+    publicId: { type: String },
+    uploadedAt: { type: Date, default: Date.now },
+    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  },
+
+  // Designer's brand overrides (UI/UX designer can modify brand settings for their task)
+  designerBrandOverrides: {
+    colors: {
+      primary: { hex: { type: String }, name: { type: String } },
+      secondary: { hex: { type: String }, name: { type: String } },
+      tertiary: { hex: { type: String }, name: { type: String } }
+    },
+    typography: {
+      title: { fontFamily: { type: String } },
+      subtitle: { fontFamily: { type: String } },
+      body: { fontFamily: { type: String } }
+    },
+    selectedLogo: { type: String, enum: ['brand', 'custom'], default: 'brand' },
+    updatedAt: { type: Date },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  },
+
   // Content output (for content writing tasks)
   contentOutput: {
     headline: { type: String },

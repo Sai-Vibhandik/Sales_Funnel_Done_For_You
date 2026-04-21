@@ -125,6 +125,17 @@ const avatarFilter = (req, file, cb) => {
   }
 };
 
+// File filter for logos
+const logoFilter = (req, file, cb) => {
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Only images (JPG, PNG, GIF, WebP, SVG) are allowed for logos.'), false);
+  }
+};
+
 // Multer upload for brand assets
 const uploadBrandAssets = multer({
   storage: brandAssetsStorage,
@@ -151,6 +162,15 @@ const uploadTaskFiles = multer({
     fileSize: 100 * 1024 * 1024 // 100MB max for videos
   }
 }).array('files', 20); // Max 20 files per task
+
+// Multer upload for custom logo
+const uploadLogo = multer({
+  storage: brandAssetsStorage, // Use same storage as brand assets
+  fileFilter: logoFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB max
+  }
+}).single('logo');
 
 // Error handling wrapper
 const handleUpload = (upload) => {
@@ -188,5 +208,6 @@ module.exports = {
   uploadBrandAssets,
   uploadAvatar,
   uploadTaskFiles,
+  uploadLogo,
   handleUpload
 };

@@ -3,8 +3,8 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, CardBody, CardHeader, Button, Input, Textarea, Spinner } from '@/components/ui';
 import { StageProgressTracker } from '@/components/workflow';
-import { ArrowLeft, ArrowRight, Users, Code, Palette, Undo2 } from 'lucide-react';
-import { projectService } from '@/services/api';
+import { ArrowLeft, ArrowRight, Users, Code, Palette, Undo2, FileText, CheckCircle } from 'lucide-react';
+import { projectService, brandSettingsService } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { Eye } from 'lucide-react';
 import {
@@ -44,6 +44,8 @@ export default function LandingPageStrategyPage() {
   const [project, setProject] = useState(null);
   const [designers, setDesigners] = useState([]);
   const [developers, setDevelopers] = useState([]);
+  const [brandSettings, setBrandSettings] = useState(null);
+  const [brandSettingsLoading, setBrandSettingsLoading] = useState(true);
 
   // Form state
   const [name, setName] = useState('');
@@ -98,6 +100,18 @@ export default function LandingPageStrategyPage() {
       const allDevelopers = developersList.length > 0 ? developersList : (developerLegacy ? [developerLegacy] : []);
       console.log('allDevelopers:', allDevelopers);
       setDevelopers(allDevelopers);
+
+      // Fetch brand settings
+      try {
+        const brandRes = await brandSettingsService.getBrandSettings(projectId);
+        if (brandRes.data) {
+          setBrandSettings(brandRes.data);
+        }
+      } catch (brandErr) {
+        console.log('No brand settings found for this project');
+      } finally {
+        setBrandSettingsLoading(false);
+      }
 
       // Check if traffic strategy is completed
       if (!projectRes.data.stages?.trafficStrategy?.isCompleted) {
@@ -472,6 +486,110 @@ export default function LandingPageStrategyPage() {
             Each landing page needs one UI/UX Designer for design and one Developer for implementation.
             These assignments will be used when generating tasks.
           </p>
+        </CardBody>
+      </Card>
+
+      {/* Brand Settings */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <Palette className="w-5 h-5 text-primary-500" />
+            Brand Settings
+          </h2>
+          <p className="text-sm text-gray-500">Configure brand colors, typography, and logos for landing page designs</p>
+        </CardHeader>
+        <CardBody>
+          {brandSettingsLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Spinner size="sm" />
+            </div>
+          ) : brandSettings && (
+            (brandSettings.colors && Object.values(brandSettings.colors).some(c => c?.hex)) ||
+            (brandSettings.typography && Object.values(brandSettings.typography).some(t => t?.fontFamily)) ||
+            brandSettings.brandManual?.filePath
+          ) ? (
+            <div className="space-y-4">
+              {/* Brand Settings Summary */}
+              <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <div>
+                    <p className="font-medium text-green-800">Brand settings configured</p>
+                    <p className="text-sm text-green-600">
+                      {brandSettings.colors && Object.values(brandSettings.colors).filter(c => c?.hex).length} colors
+                      {brandSettings.typography && Object.values(brandSettings.typography).filter(t => t?.fontFamily).length > 0 && `, ${Object.values(brandSettings.typography).filter(t => t?.fontFamily).length} fonts`}
+                      {brandSettings.brandManual?.filePath && ', brand manual uploaded'}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/dashboard/projects/${projectId}/brand-settings`)}
+                >
+                  Edit Settings
+                </Button>
+              </div>
+
+              {/* Quick Preview */}
+              {brandSettings.colors && Object.values(brandSettings.colors).some(c => c?.hex) && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Brand Colors</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {Object.entries(brandSettings.colors).map(([key, color]) => {
+                      if (!color?.hex) return null;
+                      return (
+                        <div key={key} className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full">
+                          <div
+                            className="w-4 h-4 rounded-full border border-gray-300"
+                            style={{ backgroundColor: color.hex }}
+                          />
+                          <span className="text-sm text-gray-700 capitalize">{key}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {brandSettings.typography && Object.values(brandSettings.typography).some(t => t?.fontFamily) && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Typography</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {Object.entries(brandSettings.typography).map(([key, typo]) => {
+                      if (!typo?.fontFamily) return null;
+                      return (
+                        <div key={key} className="px-3 py-1.5 bg-gray-100 rounded-full">
+                          <span className="text-sm text-gray-700 capitalize">{key}: </span>
+                          <span className="text-sm font-medium text-gray-900">{typo.fontFamily}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-center gap-3">
+                <Palette className="w-5 h-5 text-amber-600" />
+                <div>
+                  <p className="font-medium text-amber-800">No brand settings configured</p>
+                  <p className="text-sm text-amber-600">
+                    Set up brand colors, typography, and logos for consistent designs
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => navigate(`/dashboard/projects/${projectId}/brand-settings`)}
+                className="bg-amber-100 hover:bg-amber-200 text-amber-700 border-amber-300"
+              >
+                Setup Now
+              </Button>
+            </div>
+          )}
         </CardBody>
       </Card>
 

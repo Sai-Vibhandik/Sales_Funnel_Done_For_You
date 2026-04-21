@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/auth');
-const { handleUpload, uploadTaskFiles } = require('../middleware/upload');
+const { handleUpload, uploadTaskFiles, uploadLogo } = require('../middleware/upload');
 const {
   getMyTasks,
   getAllTasks,
@@ -14,6 +14,9 @@ const {
   testerReview,
   marketerReview,
   uploadFiles,
+  uploadCustomLogo,
+  deleteCustomLogo,
+  saveDesignerBrandOverrides,
   getPendingReviewTasks,
   getPendingMarketerApproval,
   getApprovedAssets,
@@ -103,6 +106,15 @@ router.put('/:taskId/marketer-review', authorize('performance_marketer', 'admin'
 
 // Upload files to task
 router.post('/:taskId/files', handleUpload(uploadTaskFiles), uploadFiles);
+
+// Upload custom logo for UI/UX designer task
+router.post('/:taskId/custom-logo', handleUpload(uploadLogo), uploadCustomLogo);
+
+// Delete custom logo
+router.delete('/:taskId/custom-logo', deleteCustomLogo);
+
+// Save designer brand overrides (colors, typography, logo selection)
+router.put('/:taskId/designer-brand', saveDesignerBrandOverrides);
 
 // Update task content
 router.put('/:taskId/content', updateTaskContent);

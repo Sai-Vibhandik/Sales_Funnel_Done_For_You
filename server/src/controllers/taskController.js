@@ -1797,6 +1797,219 @@ exports.uploadFiles = async (req, res, next) => {
   }
 };
 
+// @desc    Upload custom logo for UI/UX designer task
+// @route   POST /api/tasks/:taskId/custom-logo
+// @access  Private (UI/UX Designer assigned to task)
+exports.uploadCustomLogo = async (req, res, next) => {
+  try {
+    const { taskId } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded'
+      });
+    }
+
+    const task = await Task.findById(taskId).populate('projectId', '_id organizationId');
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found'
+      });
+    }
+
+    // Ensure organizationId is set
+    if (!task.organizationId && task.projectId?.organizationId) {
+      task.organizationId = task.projectId.organizationId;
+    }
+
+    // Check if user is assigned to this task
+    const isAssignedUploader = task.assignedTo?.toString() === req.user._id.toString();
+    const isOriginalAssignedUploader = task.originalAssignedTo?.toString() === req.user._id.toString();
+    if (!isAssignedUploader && !isOriginalAssignedUploader && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the assigned user can upload custom logo'
+      });
+    }
+
+    // Only UI/UX designers can upload custom logo for landing page design tasks
+    if (task.taskType !== 'landing_page_design') {
+      return res.status(400).json({
+        success: false,
+        message: 'Custom logo can only be uploaded for landing page design tasks'
+      });
+    }
+
+    // Delete old custom logo from Cloudinary if exists
+    if (task.customLogo?.publicId) {
+      const cloudinary = require('cloudinary').v2;
+      try {
+        await cloudinary.uploader.destroy(task.customLogo.publicId);
+      } catch (err) {
+        console.warn('Failed to delete old custom logo:', err.message);
+      }
+    }
+
+    // Process uploaded file
+    let filePath = req.file.path;
+    let publicId = req.file.filename || req.file.publicId;
+
+    // If using local storage, convert absolute path to URL path
+    if (req.file.path && req.file.path.includes('uploads')) {
+      const uploadsIndex = req.file.path.indexOf('uploads');
+      if (uploadsIndex !== -1) {
+        filePath = '/' + req.file.path.substring(uploadsIndex).replace(/\\/g, '/');
+      }
+    }
+
+    task.customLogo = {
+      name: req.file.originalname,
+      path: filePath,
+      publicId: publicId,
+      uploadedAt: new Date(),
+      uploadedBy: req.user._id
+    };
+
+    await task.save();
+
+    res.status(200).json({
+      success: true,
+      data: task,
+      message: 'Custom logo uploaded successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete custom logo from task
+// @route   DELETE /api/tasks/:taskId/custom-logo
+// @access  Private (UI/UX Designer assigned to task)
+exports.deleteCustomLogo = async (req, res, next) => {
+  try {
+    const { taskId } = req.params;
+
+    const task = await Task.findById(taskId);
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found'
+      });
+    }
+
+    // Check if user is assigned to this task
+    const isAssignedUploader = task.assignedTo?.toString() === req.user._id.toString();
+    const isOriginalAssignedUploader = task.originalAssignedTo?.toString() === req.user._id.toString();
+    if (!isAssignedUploader && !isOriginalAssignedUploader && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the assigned user can delete custom logo'
+      });
+    }
+
+    if (!task.customLogo?.path) {
+      return res.status(404).json({
+        success: false,
+        message: 'No custom logo found'
+      });
+    }
+
+    // Delete from Cloudinary if publicId exists
+    if (task.customLogo.publicId) {
+      const cloudinary = require('cloudinary').v2;
+      try {
+        await cloudinary.uploader.destroy(task.customLogo.publicId);
+      } catch (err) {
+        console.warn('Failed to delete custom logo from Cloudinary:', err.message);
+      }
+    }
+
+    task.customLogo = undefined;
+    await task.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Custom logo deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Save designer brand overrides (colors, typography, logo selection)
+// @route   PUT /api/tasks/:taskId/designer-brand
+// @access  Private (UI/UX Designer assigned to task)
+exports.saveDesignerBrandOverrides = async (req, res, next) => {
+  try {
+    const { taskId } = req.params;
+    const { colors, typography, selectedLogo } = req.body;
+
+    const task = await Task.findById(taskId);
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found'
+      });
+    }
+
+    // Check if user is assigned to this task (UI/UX designer)
+    const isAssignedUser = task.assignedTo?.toString() === req.user._id.toString();
+    const isOriginalAssigned = task.originalAssignedTo?.toString() === req.user._id.toString();
+    if (!isAssignedUser && !isOriginalAssigned && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the assigned designer can update brand settings'
+      });
+    }
+
+    // Initialize designerBrandOverrides if not exists
+    if (!task.designerBrandOverrides) {
+      task.designerBrandOverrides = {};
+    }
+
+    // Update colors if provided
+    if (colors) {
+      task.designerBrandOverrides.colors = {
+        primary: colors.primary || { hex: '', name: 'Primary' },
+        secondary: colors.secondary || { hex: '', name: 'Secondary' },
+        tertiary: colors.tertiary || { hex: '', name: 'Tertiary' }
+      };
+    }
+
+    // Update typography if provided
+    if (typography) {
+      task.designerBrandOverrides.typography = {
+        title: typography.title || { fontFamily: '' },
+        subtitle: typography.subtitle || { fontFamily: '' },
+        body: typography.body || { fontFamily: '' }
+      };
+    }
+
+    // Update selected logo if provided
+    if (selectedLogo) {
+      task.designerBrandOverrides.selectedLogo = selectedLogo;
+    }
+
+    task.designerBrandOverrides.updatedAt = new Date();
+    task.designerBrandOverrides.updatedBy = req.user._id;
+
+    await task.save();
+
+    res.status(200).json({
+      success: true,
+      data: task,
+      message: 'Designer brand settings saved successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Get tasks pending review (for testers)
 // @route   GET /api/tasks/pending-review
 // @access  Private (Tester or Admin)
