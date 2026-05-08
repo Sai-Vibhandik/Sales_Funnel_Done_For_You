@@ -1,4 +1,5 @@
 const baseTemplate = require('./baseTemplate');
+const { buildUrl } = require('../urlHelper');
 
 /**
  * Project Assignment Email Template
@@ -6,7 +7,7 @@ const baseTemplate = require('./baseTemplate');
  */
 
 const projectAssignmentTemplate = (project, assignedUser, role, assignedBy) => {
-  const projectUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/dashboard/projects/${project._id}`;
+  const projectUrl = buildUrl(`/dashboard/projects/${project._id}`);
 
   // Format role for display
   const formatRole = (roleKey) => {
@@ -29,44 +30,59 @@ const projectAssignmentTemplate = (project, assignedUser, role, assignedBy) => {
 
   const projectName = project.projectName || project.businessName;
 
-  // Get project details
-  const projectDetails = [];
-  if (project.industry) {
-    projectDetails.push(`<div class="details-item"><span class="details-label">Industry:</span><span class="details-value">${project.industry}</span></div>`);
-  }
-  if (project.status) {
-    projectDetails.push(`<div class="details-item"><span class="details-label">Status:</span><span class="details-value">${project.status}</span></div>`);
-  }
-
   const content = `
-    <h2>Project Assignment</h2>
-    <p>Hi ${assignedUser.name},</p>
-    <p><strong>${assignedBy.name}</strong> has assigned you to a new project.</p>
+    <p class="greeting">Dear ${assignedUser.name},</p>
+    <p>You have been assigned to a new project by <strong>${assignedBy.name}</strong>.</p>
 
-    <div class="details">
-      <div class="details-item">
-        <span class="details-label">Project:</span>
-        <span class="details-value">${projectName}</span>
+    <div class="info-table">
+      <div class="info-table-header">Project Details</div>
+
+      <div class="info-row">
+        <span class="info-label">Project Name</span>
+        <span class="info-value info-value-highlight">${projectName}</span>
       </div>
-      <div class="details-item">
-        <span class="details-label">Your Role:</span>
-        <span class="details-value">${formatRole(role)}</span>
+
+      <div class="info-row">
+        <span class="info-label">Your Role</span>
+        <span class="info-value">${formatRole(role)}</span>
       </div>
-      ${projectDetails.join('')}
+
+      ${project.industry ? `
+      <div class="info-row">
+        <span class="info-label">Industry</span>
+        <span class="info-value">${project.industry}</span>
+      </div>
+      ` : ''}
+
+      ${project.status ? `
+      <div class="info-row">
+        <span class="info-label">Status</span>
+        <span class="info-value">${project.status.charAt(0).toUpperCase() + project.status.slice(1).replace(/_/g, ' ')}</span>
+      </div>
+      ` : ''}
+
+      ${project.description ? `
+      <div class="info-row">
+        <span class="info-label">Description</span>
+        <span class="info-value">${project.description}</span>
+      </div>
+      ` : ''}
     </div>
 
-    <p style="text-align: center;">
-      <a href="${projectUrl}" class="button">View Project</a>
-    </p>
+    <div class="button-wrapper">
+      <a href="${projectUrl}" class="primary-button">View Project</a>
+    </div>
 
-    <p style="margin-top: 20px; font-size: 14px; color: #64748b;">
-      You can view all your projects in your <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/dashboard/projects" style="color: #4F46E5;">Project Dashboard</a>.
+    <hr class="divider">
+
+    <p class="text-center text-muted text-small">
+      Manage all your projects in the <a href="${buildUrl('/dashboard/projects')}" class="secondary-link">Project Dashboard</a>
     </p>
   `;
 
   return {
-    subject: `Assigned to Project: ${projectName} - Growth Valley`,
-    html: baseTemplate(content, { title: 'Growth Valley' })
+    subject: `Project Assignment: ${projectName} - Growth Valley`,
+    html: baseTemplate(content, { title: 'Project Assignment' })
   };
 };
 

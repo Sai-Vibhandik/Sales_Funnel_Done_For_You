@@ -41,7 +41,10 @@ const notificationSchema = new mongoose.Schema({
       'org.member_joined',
       'org.member_removed',
       'org.plan_change',
-      'org.billing_reminder'
+      'org.billing_reminder',
+      // Subscription notifications
+      'subscription_expiring_soon',
+      'subscription_expired'
     ],
     required: true
   },

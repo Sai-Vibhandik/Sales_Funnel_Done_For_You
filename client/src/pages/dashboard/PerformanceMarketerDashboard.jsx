@@ -110,14 +110,15 @@ function StatCard({
       )}
       onClick={onClick}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
           <p className="text-sm text-gray-500 font-medium">{title}</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
-          {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+          <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">{value}</p>
+          {subtitle && <p className="text-xs text-gray-400 mt-1 truncate">{subtitle}</p>}
         </div>
-        <div className={cn("p-3 rounded-2xl", iconBg)}>
-          <Icon size={24} className="text-white" />
+        <div className={cn("p-2.5 sm:p-3 rounded-xl sm:rounded-2xl flex-shrink-0", iconBg)}>
+          <Icon size={20} className="text-white sm:hidden" />
+          <Icon size={24} className="text-white hidden sm:block" />
         </div>
       </div>
     </div>
@@ -136,35 +137,35 @@ function PendingApprovalCard({ task, onApprove, onReject }) {
   };
 
   return (
-    <div className="p-4 bg-white rounded-xl border border-gray-100 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
-          <h4 className="font-medium text-gray-900">{task.taskTitle}</h4>
-          <p className="text-sm text-gray-500 mt-0.5">
+    <div className="p-3 bg-white rounded-xl border border-gray-100">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex-1 min-w-0">
+          <h4 className="font-medium text-gray-900 text-sm truncate">{task.taskTitle}</h4>
+          <p className="text-xs text-gray-500 mt-0.5 truncate">
             {task.projectId?.projectName || task.projectId?.businessName}
           </p>
         </div>
-        <Badge className={cn(statusConfig.bgColor, statusConfig.textColor)}>
+        <Badge className={cn(statusConfig.bgColor, statusConfig.textColor, "flex-shrink-0 text-xs")}>
           {taskTypeLabels[task.taskType] || task.taskType}
         </Badge>
       </div>
 
-      <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
+      <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
         <span className="flex items-center gap-1">
           <CheckCircle size={12} className="text-green-500" />
-          Tester Approved
+          <span>Tester Approved</span>
         </span>
         <span className="flex items-center gap-1">
           <Clock size={12} />
-          {formatDate(task.testerReviewedAt || task.updatedAt)}
+          <span>{formatDate(task.testerReviewedAt || task.updatedAt)}</span>
         </span>
       </div>
 
       {task.creativeName && (
-        <div className="text-sm text-gray-600 mb-3 p-2 bg-gray-50 rounded-lg">
+        <div className="text-xs text-gray-600 mb-2 p-2 bg-gray-50 rounded-lg">
           <span className="font-medium">{task.creativeName}</span>
           {task.creativeOutputType && (
-            <span className="ml-2 text-gray-400">
+            <span className="ml-1 text-gray-400">
               ({task.creativeOutputType})
             </span>
           )}
@@ -175,7 +176,7 @@ function PendingApprovalCard({ task, onApprove, onReject }) {
         <Button
           size="sm"
           onClick={() => onApprove(task._id)}
-          className="flex-1"
+          className="flex-1 text-xs sm:text-sm"
         >
           <CheckCircle size={14} className="mr-1" />
           Approve
@@ -184,7 +185,7 @@ function PendingApprovalCard({ task, onApprove, onReject }) {
           size="sm"
           variant="danger"
           onClick={onReject}
-          className="flex-1"
+          className="flex-1 text-xs sm:text-sm"
         >
           <XCircle size={14} className="mr-1" />
           Reject
@@ -208,19 +209,20 @@ function ProjectCard({ project, getNextStage, getStageProgress, navigate }) {
       className="project-card-enhanced"
     >
       {/* Header */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-lg shadow-primary-500/20">
-            <Briefcase size={20} className="text-white" />
+      <div className="flex items-start justify-between mb-4 gap-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-lg shadow-primary-500/20 flex-shrink-0">
+            <Briefcase size={18} className="text-white sm:hidden" />
+            <Briefcase size={20} className="text-white hidden sm:block" />
           </div>
-          <div>
-            <h3 className="font-semibold text-gray-900">
+          <div className="min-w-0">
+            <h3 className="font-semibold text-gray-900 truncate">
               {project.projectName || project.businessName}
             </h3>
-            <p className="text-sm text-gray-500">{project.customerName}</p>
+            <p className="text-sm text-gray-500 truncate">{project.customerName}</p>
           </div>
         </div>
-        <Badge className={cn(statusConfig.bgColor, statusConfig.textColor)}>
+        <Badge className={cn(statusConfig.bgColor, statusConfig.textColor, "flex-shrink-0")}>
           {statusConfig.label}
         </Badge>
       </div>
@@ -247,48 +249,34 @@ function ProjectCard({ project, getNextStage, getStageProgress, navigate }) {
         </div>
       </div>
 
-      {/* Stage Progress Pills */}
-      {/* <div className="flex gap-1 mb-4">
-        {['Onboarding', 'Research', 'Offer', 'Traffic', 'Landing', 'Creative'].map((stage, i) => {
-          const isCompleted = i < progress.completed;
-          const isCurrent = i === progress.completed;
-          return (
-            <div
-              key={stage}
-              className={cn(
-                'flex-1 h-1.5 rounded-full transition-all',
-                isCompleted ? 'bg-gradient-to-r from-primary-400 to-primary-500' :
-                isCurrent ? 'bg-primary-200' : 'bg-gray-100'
-              )}
-            />
-          );
-        })}
-      </div> */}
-
       {/* Next Stage Card */}
       {nextStage && (
         <div
-          className="p-4 bg-gradient-to-r from-primary-50 via-amber-50 to-yellow-50 rounded-xl border border-primary-100/50"
+          className="p-3 sm:p-4 bg-gradient-to-r from-primary-50 via-amber-50 to-yellow-50 rounded-xl border border-primary-100/50"
           onClick={(e) => {
             e.stopPropagation();
             navigate(`${STAGE_PATHS[nextStage.key]}?projectId=${project._id}`);
           }}
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-white rounded-xl shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-2 sm:p-2.5 bg-white rounded-xl shadow-sm flex-shrink-0">
                 {(() => {
                   const Icon = STAGE_ICONS[nextStage.key] || Search;
-                  return <Icon size={18} className="text-primary-600" />;
+                  return <Icon size={16} className="text-primary-600 sm:hidden" />;
+                })()}
+                {(() => {
+                  const Icon = STAGE_ICONS[nextStage.key] || Search;
+                  return <Icon size={18} className="text-primary-600 hidden sm:block" />;
                 })()}
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-gray-500 font-medium">Next Stage</p>
-                <p className="font-semibold text-gray-900">{nextStage.name}</p>
+                <p className="font-semibold text-gray-900 truncate">{nextStage.name}</p>
               </div>
             </div>
             <button
-              className="px-4 py-2 bg-white text-sm font-medium text-gray-700 rounded-xl hover:shadow-md transition-all flex items-center gap-1"
+              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white text-sm font-medium text-gray-700 rounded-xl hover:shadow-md transition-all flex items-center gap-1 justify-center flex-shrink-0"
               onClick={(e) => {
                 e.stopPropagation();
                 navigate(
@@ -613,7 +601,7 @@ export default function PerformanceMarketerDashboard({ user }) {
 
   return (
     <Fragment>
-    <div className="space-y-4 sm:space-y-6 animate-fadeIn">
+    <div className="space-y-4 sm:space-y-6 animate-fadeIn overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="min-w-0">
@@ -661,16 +649,17 @@ export default function PerformanceMarketerDashboard({ user }) {
       {/* Tasks Pending Approval Section */}
       {pendingApprovals.length > 0 && (
         <div className="stat-card-enhanced">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-400 to-amber-500 flex-shrink-0">
-                <FileCheck size={20} className="text-white" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0 mb-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-amber-400 to-amber-500 flex-shrink-0">
+                <FileCheck size={18} className="text-white sm:hidden" />
+                <FileCheck size={20} className="text-white hidden sm:block" />
               </div>
               <div className="min-w-0">
-                <h3 className="font-semibold text-gray-900">
+                <h3 className="font-semibold text-gray-900 text-sm sm:text-base">
                   Tasks Awaiting Your Approval
                 </h3>
-                <p className="text-sm text-gray-500">
+                <p className="text-xs sm:text-sm text-gray-500">
                   Reviewed by tester, needs your sign-off
                 </p>
               </div>
@@ -679,14 +668,14 @@ export default function PerformanceMarketerDashboard({ user }) {
               variant="outline"
               size="sm"
               onClick={() => navigate("/dashboard/tasks/approval")}
-              className="w-full sm:w-auto"
+              className="w-full sm:w-auto text-xs sm:text-sm"
             >
               View All
-              <ChevronRight size={16} className="ml-1" />
+              <ChevronRight size={14} className="ml-1" />
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
             {pendingApprovals.slice(0, 6).map((task) => (
               <PendingApprovalCard
                 key={task._id}
@@ -698,10 +687,12 @@ export default function PerformanceMarketerDashboard({ user }) {
           </div>
 
           {pendingApprovals.length > 6 && (
-            <div className="mt-4 text-center">
+            <div className="mt-3 text-center">
               <Button
                 variant="outline"
+                size="sm"
                 onClick={() => navigate("/dashboard/tasks/approval")}
+                className="text-xs sm:text-sm"
               >
                 View All {pendingApprovals.length} Tasks
               </Button>

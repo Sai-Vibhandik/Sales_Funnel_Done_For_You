@@ -27,6 +27,70 @@ const {
   getValidTransitions
 } = require('../constants/taskStatuses');
 
+// Map status to progress action
+const STATUS_TO_ACTION = {
+  'todo': 'created',
+  'in_progress': 'assigned',
+  'content_pending': 'assigned',
+  'content_submitted': 'submitted',
+  'content_final_approved': 'approved',
+  'content_rejected': 'rejected',
+  'design_pending': 'assigned',
+  'design_submitted': 'submitted',
+  'design_approved': 'approved',
+  'design_rejected': 'rejected',
+  'development_pending': 'assigned',
+  'development_submitted': 'submitted',
+  'development_approved': 'approved',
+  'development_rejected': 'rejected',
+  'final_approved': 'completed',
+  'rejected': 'rejected',
+  'approved_by_tester': 'approved',
+  'submitted': 'submitted'
+};
+
+// Helper function to add progress history entry
+const addProgressEntry = (task, userId, userRole, action, notes = null) => {
+  // Map current status to stage
+  const stageMap = {
+    'todo': 'created',
+    'in_progress': 'assigned',
+    'content_pending': 'content_pending',
+    'content_submitted': 'content_submitted',
+    'content_final_approved': 'content_approved',
+    'content_rejected': 'content_rejected',
+    'design_pending': 'design_pending',
+    'design_submitted': 'design_submitted',
+    'design_approved': 'design_approved',
+    'design_rejected': 'design_rejected',
+    'development_pending': 'development_pending',
+    'development_submitted': 'development_submitted',
+    'development_approved': 'development_approved',
+    'final_approved': 'final_approved',
+    'rejected': 'rejected',
+    'approved_by_tester': 'marketer_review'
+  };
+
+  const stage = stageMap[task.status] || task.status;
+
+  // Calculate duration from previous entry
+  let durationFromPrevious = null;
+  if (task.progressHistory && task.progressHistory.length > 0) {
+    const lastEntry = task.progressHistory[task.progressHistory.length - 1];
+    durationFromPrevious = new Date() - new Date(lastEntry.timestamp);
+  }
+
+  task.progressHistory.push({
+    stage,
+    action,
+    actor: userId,
+    actorRole: userRole,
+    timestamp: new Date(),
+    notes,
+    durationFromPrevious
+  });
+};
+
 // Helper to check project access
 const checkProjectAccess = async (projectId, user) => {
   const project = await Project.findOne({
@@ -117,6 +181,7 @@ exports.getProjectTasks = async (req, res, next) => {
       .populate('testerId', 'name email role')
       .populate('marketerId', 'name email role')
       .populate('parentTaskId', 'taskTitle status')
+      .populate('progressHistory.actor', 'name email role')
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -181,6 +246,7 @@ exports.getMyTasks = async (req, res, next) => {
       .populate('assignedTo', 'name email role')
       .populate('originalAssignedTo', 'name email role')
       .populate('assignedBy', 'name email')
+      .populate('progressHistory.actor', 'name email role')
       .sort({ priority: -1, dueDate: 1 });
 
     // Filter out tasks where project was deleted
@@ -213,7 +279,8 @@ exports.getTask = async (req, res, next) => {
       .populate('marketerApprovedBy', 'name email')
       .populate('testerId', 'name email role')
       .populate('marketerId', 'name email role')
-      .populate('parentTaskId', 'taskTitle status');
+      .populate('parentTaskId', 'taskTitle status')
+      .populate('progressHistory.actor', 'name email role');
 
     if (!task) {
       return res.status(404).json({
@@ -288,7 +355,16 @@ exports.createTask = async (req, res, next) => {
       dueDate: dueDate ? new Date(dueDate) : undefined,
       aiPrompt,
       strategyContext,
-      status: Task.getInitialStatus(taskType)
+      status: Task.getInitialStatus(taskType),
+      // Initialize progress history with creation entry
+      progressHistory: [{
+        stage: 'created',
+        action: 'created',
+        actor: req.user._id,
+        actorRole: req.user.role,
+        timestamp: new Date(),
+        notes: assignedTo ? `Task created and assigned to ${role}` : 'Task created'
+      }]
     });
 
     // Notify assigned user if any
@@ -400,9 +476,11 @@ exports.updateTask = async (req, res, next) => {
           task.originalAssignedTo = task.assignedTo;
         }
         task.assignedRole = 'tester';
-        // Assign to specific tester if available, otherwise the tester role will handle it
-        if (task.testerId) {
-          task.assignedTo = task.testerId;
+        // Assign to specific tester if available (check testerIds array first, then legacy testerId)
+        const assignedTesterId = task.testerIds?.[0] || task.testerId;
+        if (assignedTesterId) {
+          task.assignedTo = assignedTesterId;
+          console.log(`Task ${task._id}: Assigned to tester from task.testerIds/testerId: ${assignedTesterId}`);
         }
       } else if (status === 'design_submitted') {
         // Preserve the original designer for history
@@ -410,8 +488,10 @@ exports.updateTask = async (req, res, next) => {
           task.originalAssignedTo = task.assignedTo;
         }
         task.assignedRole = 'tester';
-        if (task.testerId) {
-          task.assignedTo = task.testerId;
+        const assignedTesterId = task.testerIds?.[0] || task.testerId;
+        if (assignedTesterId) {
+          task.assignedTo = assignedTesterId;
+          console.log(`Task ${task._id}: Assigned to tester from task.testerIds/testerId: ${assignedTesterId}`);
         }
       } else if (status === 'development_submitted') {
         // Preserve the original developer for history
@@ -419,13 +499,15 @@ exports.updateTask = async (req, res, next) => {
           task.originalAssignedTo = task.assignedTo;
         }
         task.assignedRole = 'tester';
-        if (task.testerId) {
-          task.assignedTo = task.testerId;
+        const assignedTesterId = task.testerIds?.[0] || task.testerId;
+        if (assignedTesterId) {
+          task.assignedTo = assignedTesterId;
+          console.log(`Task ${task._id}: Assigned to tester from task.testerIds/testerId: ${assignedTesterId}`);
         }
       }
 
       // If testerId is not set and task is being submitted, get tester from project
-      if (['content_submitted', 'design_submitted', 'development_submitted'].includes(status) && !task.testerId) {
+      if (['content_submitted', 'design_submitted', 'development_submitted'].includes(status) && !task.testerIds?.length && !task.testerId) {
         const project = await Project.findById(task.projectId._id || task.projectId).select('assignedTeam');
         if (project?.assignedTeam) {
           // Get tester from project team (check array field first, then legacy field)
@@ -467,6 +549,11 @@ exports.updateTask = async (req, res, next) => {
       }
 
       task.addRevision(req.user._id, notes || '', oldStatus, status);
+
+      // Add progress history entry for status change
+      const action = STATUS_TO_ACTION[status] || 'submitted';
+      const progressNotes = notes || `Status changed from ${oldStatus} to ${status}`;
+      addProgressEntry(task, req.user._id, req.user.role, action, progressNotes);
     }
 
     // If status is changing to content_final_approved, copy content to linked design task
@@ -682,14 +769,16 @@ exports.testerReview = async (req, res, next) => {
     if (approved) {
       // Determine next status based on task type and current status
       if (task.status === 'content_submitted') {
-        // Content approved by tester - content is finalized, design can start
-        // The content task is complete, NOT assigned to marketer
-        // The paired design task should be activated and assigned to designer
-        newStatus = 'content_final_approved';
-        // Keep content task assigned to content_writer for history
-        // The designer assignment will happen on the design task below
-        notificationMessage = `Your content for "${task.taskTitle}" has been approved by the tester.`;
-        notificationType = 'content_final_approved';
+        // Content approved by tester - goes to marketer for final approval
+        // After marketer approves, the content will be finalized and design can start
+        newStatus = 'content_approved';
+        task.assignedRole = 'performance_marketer';
+        // Assign to specific marketer if available
+        if (task.marketerId) {
+          task.assignedTo = task.marketerId;
+        }
+        notificationMessage = `Your content for "${task.taskTitle}" has been approved by the tester and is awaiting final marketer review.`;
+        notificationType = 'task_approved_by_tester';
       } else if (task.taskType === 'landing_page_design' || task.status === 'design_submitted') {
         // Design approved by tester - goes to marketer for final approval
         newStatus = 'design_approved';
@@ -842,6 +931,13 @@ exports.testerReview = async (req, res, next) => {
     }
 
     task.addRevision(req.user._id, approved ? 'Approved by tester' : `Rejected: ${rejectionNote}`, task.status, newStatus);
+
+    // Add progress history entry for tester review
+    const testerAction = approved ? 'approved' : 'rejected';
+    const testerNotes = approved
+      ? `Approved by tester ${req.user.name || 'Tester'}`
+      : `Rejected by tester: ${rejectionReason || 'No reason provided'} - ${rejectionNote || ''}`;
+    addProgressEntry(task, req.user._id, req.user.role, testerAction, testerNotes);
 
     await task.save();
 
@@ -1256,9 +1352,14 @@ exports.marketerReview = async (req, res, next) => {
 
     if (approved) {
       // Determine next status based on current status and task type
-      // Note: Marketer only approves design/video, NOT content
-      // Content goes directly from tester to designer after content_final_approved
-      if (task.status === 'design_approved') {
+      if (task.status === 'content_approved') {
+        // Content approved by marketer - content is finalized, design can start
+        // The content task is complete, and the paired design task should be activated
+        newStatus = 'content_final_approved';
+        // Keep content task assigned to content_writer for history
+        notificationMessage = `Your content for "${task.taskTitle}" has been fully approved by the marketer and is ready for design.`;
+        notificationType = 'content_final_approved';
+      } else if (task.status === 'design_approved') {
         // Design approved - check task type for next step
         if (task.taskType === 'landing_page_design') {
           // Landing page design approved - move to development phase
@@ -1290,16 +1391,35 @@ exports.marketerReview = async (req, res, next) => {
         _id: task.projectId._id || task.projectId,
         organizationId: req.organizationId
       })
+        .populate('assignedTeam.contentWriters', '_id name')
         .populate('assignedTeam.graphicDesigners', '_id name')
         .populate('assignedTeam.videoEditors', '_id name')
         .populate('assignedTeam.uiUxDesigners', '_id name')
         .populate('assignedTeam.developers', '_id name')
+        .populate('assignedTeam.contentWriter', '_id name')
         .populate('assignedTeam.graphicDesigner', '_id name')
         .populate('assignedTeam.videoEditor', '_id name')
         .populate('assignedTeam.uiUxDesigner', '_id name')
         .populate('assignedTeam.developer', '_id name');
 
-      if (task.status === 'design_approved') {
+      if (task.status === 'content_approved') {
+        // Content rejected by marketer - assign back to the ORIGINAL content writer who submitted
+        newStatus = 'content_rejected';
+        task.assignedRole = 'content_writer';
+
+        // IMPORTANT: Assign back to the original submitter, not a random team member
+        if (task.originalAssignedTo) {
+          task.assignedTo = task.originalAssignedTo;
+        } else {
+          // Fallback: Find the Content Planner from project team
+          const contentWriter = project?.assignedTeam?.contentWriters?.[0] ||
+                                project?.assignedTeam?.contentWriter;
+          if (contentWriter) {
+            task.assignedTo = contentWriter._id || contentWriter;
+          }
+        }
+
+      } else if (task.status === 'design_approved') {
         // Design rejected by marketer - assign back to the ORIGINAL designer who submitted
         newStatus = 'design_rejected';
 
@@ -1385,6 +1505,13 @@ exports.marketerReview = async (req, res, next) => {
     }
 
     task.addRevision(req.user._id, approved ? 'Approved by marketer' : `Rejected: ${rejectionNote}`, task.status, newStatus);
+
+    // Add progress history entry for marketer review
+    const marketerAction = approved ? 'completed' : 'rejected';
+    const marketerNotes = approved
+      ? `Final approval by performance marketer ${req.user.name || 'Marketer'}`
+      : `Rejected by performance marketer: ${rejectionReason || 'No reason provided'} - ${rejectionNote || ''}`;
+    addProgressEntry(task, req.user._id, req.user.role, marketerAction, marketerNotes);
 
     await task.save();
 
@@ -1560,7 +1687,8 @@ exports.marketerReview = async (req, res, next) => {
       }
     }
 
-    // If landing page design is approved by marketer, notify developer
+    // If landing page design is approved by marketer, notify ALL developers
+    // FIX: Previously only ONE development task was found, but multiple developers may have tasks
     if (approved && newStatus === 'development_pending' && task.taskType === 'landing_page_design') {
       if (!task.projectId) {
         console.warn('Task missing projectId during landing page design approval');
@@ -1572,18 +1700,29 @@ exports.marketerReview = async (req, res, next) => {
           .populate('assignedTeam.developers', '_id name')
           .populate('assignedTeam.developer', '_id name');
 
-        // Find the development task for this landing page and activate it
-        const developmentTask = await Task.findOne({
+        // Find ALL development tasks for this landing page (one per assigned developer)
+        const developmentTasks = await Task.find({
           projectId: task.projectId._id || task.projectId,
           landingPageId: task.landingPageId,
           taskType: 'landing_page_development'
         });
 
-        if (developmentTask) {
+        console.log(`Found ${developmentTasks.length} development task(s) for landing page ${task.landingPageId}`);
+
+        // Activate each development task and notify each developer
+        for (const developmentTask of developmentTasks) {
           // Copy design details to development task
           developmentTask.designLink = task.designLink;
           developmentTask.designFile = task.designFile;
           developmentTask.designNotes = task.designNotes;
+
+          // Copy designer's AI prompt and brand overrides for developer reference
+          if (task.aiPrompt) {
+            developmentTask.designerPrompt = task.aiPrompt;
+          }
+          if (task.designerBrandOverrides) {
+            developmentTask.designerBrandOverrides = task.designerBrandOverrides;
+          }
 
           // Update description to reflect that design is now approved
           developmentTask.description = `Develop the landing page for ${task.projectId?.projectName || task.projectId?.businessName || 'the project'} based on the approved design.`;
@@ -1600,6 +1739,7 @@ exports.marketerReview = async (req, res, next) => {
           // Assign developer to the task now that design is approved
           if (developerId) {
             developmentTask.assignedTo = developerId;
+            console.log(`Assigning developer ${developerId} to development task ${developmentTask._id}`);
           }
 
           await developmentTask.save();
@@ -1627,6 +1767,8 @@ exports.marketerReview = async (req, res, next) => {
             }
           }
         }
+
+        console.log(`Activated ${developmentTasks.length} development task(s) for landing page`);
       }
     }
 
@@ -1940,13 +2082,13 @@ exports.deleteCustomLogo = async (req, res, next) => {
   }
 };
 
-// @desc    Save designer brand overrides (colors, typography, logo selection)
+// @desc    Save designer brand overrides (colors, typography, logo selection, brand manual reference)
 // @route   PUT /api/tasks/:taskId/designer-brand
 // @access  Private (UI/UX Designer assigned to task)
 exports.saveDesignerBrandOverrides = async (req, res, next) => {
   try {
     const { taskId } = req.params;
-    const { colors, typography, selectedLogo } = req.body;
+    const { colors, typography, selectedLogo, brandManualReference } = req.body;
 
     const task = await Task.findById(taskId);
 
@@ -1993,6 +2135,16 @@ exports.saveDesignerBrandOverrides = async (req, res, next) => {
     // Update selected logo if provided
     if (selectedLogo) {
       task.designerBrandOverrides.selectedLogo = selectedLogo;
+    }
+
+    // Update brand manual reference if provided
+    if (brandManualReference) {
+      task.designerBrandOverrides.brandManualReference = {
+        fileName: brandManualReference.fileName || '',
+        filePath: brandManualReference.filePath || '',
+        acknowledgedAt: brandManualReference.acknowledged ? new Date() : null,
+        acknowledged: brandManualReference.acknowledged || false
+      };
     }
 
     task.designerBrandOverrides.updatedAt = new Date();
@@ -2127,6 +2279,7 @@ exports.getPendingMarketerApproval = async (req, res, next) => {
       .populate('projectId', 'projectName businessName industry')
       .populate('assignedTo', 'name email role')
       .populate('testerReviewedBy', 'name email')
+      .populate('progressHistory.actor', 'name email role')
       .sort({ testerReviewedAt: 1 });
 
     // Filter out tasks where project was deleted
@@ -2579,9 +2732,8 @@ exports.getMyRoleTasks = async (req, res, next) => {
       };
     } else if (assignedRole === 'performance_marketer') {
       // Performance marketers see tasks pending their approval AND assigned to them specifically
-      // Note: Content goes from Tester → Designer, NOT to Marketer
-      // Marketer only reviews design_approved and development_approved tasks
-      query.status = { $in: ['design_approved', 'development_approved'] };
+      // Marketer reviews content_approved, design_approved, and development_approved tasks
+      query.status = { $in: ['content_approved', 'design_approved', 'development_approved'] };
       query.marketerId = req.user._id;
       // organizationId already set above
     } else {
@@ -3009,32 +3161,57 @@ async function notifyTesterForReview(task, organizationId) {
   const testerIds = [];
   const testers = [];
 
-  // From new array field
-  if (project.assignedTeam?.testers && Array.isArray(project.assignedTeam.testers)) {
-    project.assignedTeam.testers.forEach(tester => {
-      if (tester && tester._id) {
-        testerIds.push(tester._id);
-        testers.push(tester);
+  // First priority: testers assigned specifically to this task (from creative plan / landing page)
+  if (task.testerIds && Array.isArray(task.testerIds) && task.testerIds.length > 0) {
+    for (const testerId of task.testerIds) {
+      const idStr = testerId._id?.toString() || testerId.toString();
+      if (!testerIds.some(id => id.toString() === idStr)) {
+        testerIds.push(idStr);
+        const specificTester = await User.findById(idStr).select('_id name email');
+        if (specificTester) {
+          testers.push(specificTester);
+        }
       }
-    });
-  }
-
-  // From legacy single field (for backward compatibility)
-  if (project.assignedTeam?.tester && project.assignedTeam.tester._id) {
-    // Only add if not already in the list
-    if (!testerIds.some(id => id.toString() === project.assignedTeam.tester._id.toString())) {
-      testerIds.push(project.assignedTeam.tester._id);
-      testers.push(project.assignedTeam.tester);
     }
+    console.log(`Task ${task._id}: Using task-specific testers from testerIds: ${testerIds.join(', ')}`);
   }
-
-  // Also notify the specific tester assigned to the task (if set)
-  if (task.testerId && !testerIds.some(id => id.toString() === task.testerId.toString())) {
-    const specificTester = await User.findById(task.testerId).select('_id name email');
-    if (specificTester) {
-      testerIds.push(specificTester._id);
-      testers.push(specificTester);
+  // Legacy single testerId field
+  else if (task.testerId) {
+    const idStr = task.testerId._id?.toString() || task.testerId.toString();
+    if (!testerIds.some(id => id.toString() === idStr)) {
+      testerIds.push(idStr);
+      const specificTester = await User.findById(idStr).select('_id name email');
+      if (specificTester) {
+        testers.push(specificTester);
+      }
     }
+    console.log(`Task ${task._id}: Using task-specific tester from testerId: ${idStr}`);
+  }
+  // Fall back to project-level testers
+  else {
+    // From new array field
+    if (project.assignedTeam?.testers && Array.isArray(project.assignedTeam.testers)) {
+      project.assignedTeam.testers.forEach(tester => {
+        if (tester && tester._id) {
+          const idStr = tester._id.toString();
+          if (!testerIds.some(id => id.toString() === idStr)) {
+            testerIds.push(idStr);
+            testers.push(tester);
+          }
+        }
+      });
+    }
+
+    // From legacy single field (for backward compatibility)
+    if (project.assignedTeam?.tester && project.assignedTeam.tester._id) {
+      const idStr = project.assignedTeam.tester._id.toString();
+      // Only add if not already in the list
+      if (!testerIds.some(id => id.toString() === idStr)) {
+        testerIds.push(idStr);
+        testers.push(project.assignedTeam.tester);
+      }
+    }
+    console.log(`Task ${task._id}: Using project-level testers: ${testerIds.join(', ')}`);
   }
 
   // Notify all testers

@@ -1148,9 +1148,16 @@ INPUT DATA:
 - Hook: {{hook}}
 - Headline: {{headline}}
 - CTA: {{cta}}
+- Primary Logo: {{primaryLogo}}
+- Secondary Logo: {{secondaryLogo}}
+- Brand Colors: {{brandColors}}
+- Brand Typography: {{brandTypography}}
+- Brand Manual: {{brandManualUrl}}
 
 DESIGN REFERENCE:
 The UI/UX designer has provided a design file. Your task is to implement it with the following considerations.
+
+IMPORTANT: Check the BRAND GUIDELINES section for logo URLs, colors, and typography. You MUST use the exact logo URLs provided and follow the brand colors and typography exactly.
 
 TASK:
 Create a comprehensive development brief that covers:
@@ -1294,7 +1301,13 @@ function replaceTemplatePlaceholders(template, context) {
     '{{projectName}}': context.projectName || '',
     '{{businessName}}': context.businessName || '',
     '{{taskTitle}}': context.taskTitle || '',
-    '{{targetAudience}}': context.targetAudience || ''
+    '{{targetAudience}}': context.targetAudience || '',
+    // Brand assets placeholders
+    '{{primaryLogo}}': context.primaryLogo || '',
+    '{{secondaryLogo}}': context.secondaryLogo || '',
+    '{{brandColors}}': context.brandColors || '',
+    '{{brandTypography}}': context.brandTypography || '',
+    '{{brandManualUrl}}': context.brandManualUrl || ''
   };
 
   for (const [placeholder, value] of Object.entries(placeholders)) {

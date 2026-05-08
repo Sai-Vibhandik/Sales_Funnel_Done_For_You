@@ -155,6 +155,17 @@ brandSettingsSchema.methods.generateBrandPrompt = function() {
     parts.push(`Brand Voice: ${this.brandGuidelines.voice}`);
   }
 
+  // Logos
+  if (this.logos?.primary?.filePath) {
+    parts.push(`Primary Logo: ${this.logos.primary.filePath}`);
+  }
+  if (this.logos?.secondary?.filePath) {
+    parts.push(`Secondary Logo: ${this.logos.secondary.filePath}`);
+  }
+  if (this.logos?.favicon?.filePath) {
+    parts.push(`Favicon: ${this.logos.favicon.filePath}`);
+  }
+
   return parts.length > 0 ? `Brand Guidelines:\n${parts.join('\n')}` : '';
 };
 

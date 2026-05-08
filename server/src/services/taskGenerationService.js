@@ -177,46 +177,89 @@ async function generateTasksFromStrategy(projectId, creativeStrategy, completedB
 
     // Generate tasks from new creative plan
     if (creativePlan.length > 0) {
-      // Check which creative plan items already have tasks by task title
-      // Each creative plan item creates tasks with specific titles
+      // Check which creative plan items already have tasks by creativePlanItemId
+      // This allows us to update existing tasks when name/role/framework changes
       const existingCreativePlanTasks = await Task.find({
         projectId,
         creativeStrategyId: creativeStrategy?._id,
         taskType: { $in: ['content_creation', 'graphic_design', 'video_editing'] }
-      }).select('taskTitle taskType');
+      }).select('taskTitle taskType creativePlanItemId status');
 
-      // Build a set of existing task titles to identify which creative plan items have tasks
-      // Content tasks are titled "Content: {creativeName}" and design tasks are "{creativeName}"
-      const existingTaskTitles = new Set(
-        existingCreativePlanTasks.map(t => t.taskTitle)
-      );
+      // Build a map of existing tasks by creativePlanItemId
+      // Key: creativePlanItemId, Value: { contentTask, designTask }
+      const existingTasksByItemId = new Map();
 
-      // Filter creative plan items that don't have tasks yet
-      const newCreativePlanItems = creativePlan.filter(item => {
-        const itemTitle = item.name || item.subType || item.adType || `Creative ${creativePlan.indexOf(item) + 1}`;
-        const contentTaskTitle = `Content: ${itemTitle}`;
-        const designTaskTitle = itemTitle;
+      // Also build a map by task title + type as a fallback for duplicate detection
+      // This prevents creating duplicate tasks when creativePlanItemId changes
+      const existingTasksByTitleAndType = new Map();
 
-        // Check if both content and design tasks exist for this item
-        const hasContentTask = existingTaskTitles.has(contentTaskTitle);
-        const hasDesignTask = existingTaskTitles.has(designTaskTitle);
-
-        // If either task is missing, include this item for task generation
-        const needsTasks = !hasContentTask || !hasDesignTask;
-
-        if (!needsTasks) {
-          console.log(`Skipping creative plan item "${itemTitle}" - tasks already exist`);
+      for (const task of existingCreativePlanTasks) {
+        // Index by creativePlanItemId
+        if (task.creativePlanItemId) {
+          if (!existingTasksByItemId.has(task.creativePlanItemId.toString())) {
+            existingTasksByItemId.set(task.creativePlanItemId.toString(), {});
+          }
+          const itemTasks = existingTasksByItemId.get(task.creativePlanItemId.toString());
+          if (task.taskType === 'content_creation') {
+            itemTasks.contentTask = task;
+          } else if (task.taskType === 'graphic_design' || task.taskType === 'video_editing') {
+            itemTasks.designTask = task;
+          }
         }
 
-        return needsTasks;
-      });
+        // Also index by title + type for duplicate detection
+        const titleKey = `${task.taskTitle}_${task.taskType}`;
+        if (!existingTasksByTitleAndType.has(titleKey)) {
+          existingTasksByTitleAndType.set(titleKey, task);
+        }
+      }
 
+      console.log(`Found ${existingTasksByItemId.size} creative plan items with existing tasks (by ID)`);
+      console.log(`Found ${existingTasksByTitleAndType.size} existing tasks (by title+type)`);
+
+      // Separate items into: new items (need task creation) and existing items (need task update)
+      const newCreativePlanItems = [];
+      const existingCreativePlanItems = [];
+
+      for (const item of creativePlan) {
+        const itemId = item._id?.toString();
+        const itemTitle = item.name || item.subType || item.adType || `Creative ${creativePlan.indexOf(item) + 1}`;
+
+        // Check if tasks exist by ID
+        if (itemId && existingTasksByItemId.has(itemId)) {
+          existingCreativePlanItems.push(item);
+          continue;
+        }
+
+        // Also check by title + type to prevent duplicates
+        const contentTitleKey = `Content: ${itemTitle}_content_creation`;
+        const designTitleKey = `${itemTitle}_${item.creativeType === 'VIDEO' ? 'video_editing' : 'graphic_design'}`;
+
+        if (existingTasksByTitleAndType.has(contentTitleKey) || existingTasksByTitleAndType.has(designTitleKey)) {
+          console.log(`Found existing task for "${itemTitle}" by title, treating as existing item`);
+          existingCreativePlanItems.push(item);
+          continue;
+        }
+
+        // This is a new item
+        newCreativePlanItems.push(item);
+      }
+
+      console.log(`New creative plan items: ${newCreativePlanItems.length}, Existing items to update: ${existingCreativePlanItems.length}`);
+
+      // Update existing tasks with new data (name, role, aiFramework, etc.)
+      if (existingCreativePlanItems.length > 0) {
+        console.log('Updating existing tasks with new creative plan data...');
+        await updateExistingCreativePlanTasks(existingCreativePlanItems, existingTasksByItemId, project, creativeStrategy?._id);
+      }
+
+      // Generate tasks for new creative plan items
       if (newCreativePlanItems.length > 0) {
         console.log(`Generating tasks for ${newCreativePlanItems.length} new creative plan items (out of ${creativePlan.length} total)`);
         const creativePlanTasks = await generateCreativePlanTasks(newCreativePlanItems, projectId, creativeStrategy?._id || null, strategyContext, project, completedBy, contextLink, contextPdfUrl);
         tasks.push(...creativePlanTasks);
       } else {
-        console.log(`All ${creativePlan.length} creative plan items already have tasks - skipping task generation`);
+        console.log(`All ${creativePlan.length} creative plan items already have tasks - updated existing tasks instead of creating duplicates`);
       }
     }
 
@@ -372,11 +415,44 @@ function generateAdTypeTasks(adType, projectId, creativeStrategyId, strategyCont
     return null;
   };
 
+  // Helper function to get all team members for a role (for multiple testers support)
+  const getAllMembers = (role) => {
+    const roleFieldMap = {
+      'content_writer': { arrayField: 'contentWriters', legacyField: 'contentWriter' },
+      'graphic_designer': { arrayField: 'graphicDesigners', legacyField: 'graphicDesigner' },
+      'video_editor': { arrayField: 'videoEditors', legacyField: 'videoEditor' },
+      'ui_ux_designer': { arrayField: 'uiUxDesigners', legacyField: 'uiUxDesigner' },
+      'developer': { arrayField: 'developers', legacyField: 'developer' },
+      'tester': { arrayField: 'testers', legacyField: 'tester' }
+    };
+
+    const fieldConfig = roleFieldMap[role];
+    if (!fieldConfig) return [];
+
+    const members = [];
+
+    // Check new array field first
+    const arrayMembers = project.assignedTeam?.[fieldConfig.arrayField];
+    if (arrayMembers && Array.isArray(arrayMembers) && arrayMembers.length > 0) {
+      arrayMembers.forEach(member => {
+        members.push(member._id || member);
+      });
+    }
+
+    // Fall back to legacy field
+    const legacyMember = project.assignedTeam?.[fieldConfig.legacyField];
+    if (legacyMember && members.length === 0) {
+      members.push(legacyMember._id || legacyMember);
+    }
+
+    return members;
+  };
+
   // Get assigned team members
   const contentWriter = getFirstMember('content_writer');
   const graphicDesigner = getFirstMember('graphic_designer');
   const videoEditor = getFirstMember('video_editor');
-  const tester = getFirstMember('tester');
+  const testers = getAllMembers('tester'); // Support multiple testers
 
   // Get platforms array
   const platforms = creatives.platforms || [];
@@ -628,90 +704,505 @@ function generateLandingPageTasks(landingPage, projectId, creativeStrategyId, st
     return null;
   };
 
-  // Get tester and marketer from project team
-  const testerId = getFirstMember('tester');
+  // Helper function to get all team members for a role (supports multiple testers)
+  const getAllMembers = (role) => {
+    const roleFieldMap = {
+      'ui_ux_designer': { arrayField: 'uiUxDesigners', legacyField: 'uiUxDesigner' },
+      'developer': { arrayField: 'developers', legacyField: 'developer' },
+      'tester': { arrayField: 'testers', legacyField: 'tester' },
+      'performance_marketer': { arrayField: 'performanceMarketers', legacyField: 'performanceMarketer' }
+    };
+
+    const fieldConfig = roleFieldMap[role];
+    if (!fieldConfig) return [];
+
+    const members = [];
+
+    // Check new array field first
+    const arrayMembers = project.assignedTeam?.[fieldConfig.arrayField];
+    if (arrayMembers && Array.isArray(arrayMembers) && arrayMembers.length > 0) {
+      arrayMembers.forEach(member => {
+        members.push(member._id || member);
+      });
+    }
+
+    // Fall back to legacy field
+    const legacyMember = project.assignedTeam?.[fieldConfig.legacyField];
+    if (legacyMember && members.length === 0) {
+      members.push(legacyMember._id || legacyMember);
+    }
+
+    return members;
+  };
+
+  // Get tester(s) and marketer from project team
+  // Support landing-page-specific assignedTesters, otherwise use project-level testers
+  let testerIds = [];
+  if (landingPage.assignedTesters && Array.isArray(landingPage.assignedTesters) && landingPage.assignedTesters.length > 0) {
+    // Use landing-page-specific testers
+    testerIds = landingPage.assignedTesters.map(t => t._id || t);
+  } else {
+    // Fall back to project-level testers
+    testerIds = getAllMembers('tester');
+  }
   const marketerId = getFirstMember('performance_marketer');
 
-  // Use landing-page-specific assignments if available, otherwise fall back to project-level assignments
-  let uiuxDesigner = landingPage.assignedDesigner || null;
-  let developer = landingPage.assignedDeveloper || null;
-
-  // Fall back to project-level assignments if not set on landing page
-  if (!uiuxDesigner) {
-    uiuxDesigner = getFirstMember('ui_ux_designer');
+  // Get UI/UX Designers - support both new array field and legacy single field
+  let designerIds = [];
+  if (landingPage.assignedDesigners && Array.isArray(landingPage.assignedDesigners) && landingPage.assignedDesigners.length > 0) {
+    designerIds = landingPage.assignedDesigners.map(d => d._id || d);
+  } else if (landingPage.assignedDesigner) {
+    // Legacy single field
+    designerIds = [landingPage.assignedDesigner._id || landingPage.assignedDesigner];
+  } else {
+    // Fall back to project-level designers
+    designerIds = getAllMembers('ui_ux_designer');
   }
-  if (!developer) {
-    developer = getFirstMember('developer');
+
+  // Get Developers - support both new array field and legacy single field
+  let developerIds = [];
+  if (landingPage.assignedDevelopers && Array.isArray(landingPage.assignedDevelopers) && landingPage.assignedDevelopers.length > 0) {
+    developerIds = landingPage.assignedDevelopers.map(d => d._id || d);
+  } else if (landingPage.assignedDeveloper) {
+    // Legacy single field
+    developerIds = [landingPage.assignedDeveloper._id || landingPage.assignedDeveloper];
+  } else {
+    // Fall back to project-level developers
+    developerIds = getAllMembers('developer');
+  }
+
+  // Get Content Writers - from landing page or project
+  let contentWriterIds = [];
+  if (landingPage.assignedContentWriters && Array.isArray(landingPage.assignedContentWriters) && landingPage.assignedContentWriters.length > 0) {
+    contentWriterIds = landingPage.assignedContentWriters.map(w => w._id || w);
+  } else {
+    contentWriterIds = getAllMembers('content_writer');
+  }
+
+  // Get Graphic Designers - from landing page or project
+  let graphicDesignerIds = [];
+  if (landingPage.assignedGraphicDesigners && Array.isArray(landingPage.assignedGraphicDesigners) && landingPage.assignedGraphicDesigners.length > 0) {
+    graphicDesignerIds = landingPage.assignedGraphicDesigners.map(d => d._id || d);
+  } else {
+    graphicDesignerIds = getAllMembers('graphic_designer');
+  }
+
+  // Get Video Editors - from landing page or project
+  let videoEditorIds = [];
+  if (landingPage.assignedVideoEditors && Array.isArray(landingPage.assignedVideoEditors) && landingPage.assignedVideoEditors.length > 0) {
+    videoEditorIds = landingPage.assignedVideoEditors.map(e => e._id || e);
+  } else {
+    videoEditorIds = getAllMembers('video_editor');
   }
 
   console.log(`\n=== Landing Page: ${landingPage.name || 'Unnamed'} ===`);
-  console.log(`Assigned Designer: ${uiuxDesigner || 'Not assigned'}`);
-  console.log(`Assigned Developer: ${developer || 'Not assigned'}`);
-  console.log(`Tester: ${testerId || 'Not assigned'}`);
+  console.log(`Assigned Designers: ${designerIds.length > 0 ? designerIds.join(', ') : 'Not assigned'}`);
+  console.log(`Assigned Developers: ${developerIds.length > 0 ? developerIds.join(', ') : 'Not assigned'}`);
+  console.log(`Content Writers: ${contentWriterIds.length > 0 ? contentWriterIds.join(', ') : 'Not assigned'}`);
+  console.log(`Graphic Designers: ${graphicDesignerIds.length > 0 ? graphicDesignerIds.join(', ') : 'Not assigned'}`);
+  console.log(`Video Editors: ${videoEditorIds.length > 0 ? videoEditorIds.join(', ') : 'Not assigned'}`);
+  console.log(`Testers: ${testerIds.length > 0 ? testerIds.join(', ') : 'Not assigned'}`);
   console.log(`Marketer: ${marketerId || 'Not assigned'}`);
 
-  // Landing page design task (starts the workflow)
-  // Flow: design_pending → design_submitted → (Tester reviews) → design_approved → (Marketer reviews) → development_pending
-  const designTask = createTask({
-    projectId,
-    organizationId: project.organizationId,
-    landingPageId: landingPage._id,
-    creativeStrategyId,
-    taskType: 'landing_page_design',
-    assetType: 'landing_page_design',
-    taskTitle: `Design: ${landingPage.name || 'Landing Page'}`,
-    assignedRole: 'ui_ux_designer',
-    assignedTo: uiuxDesigner,
-    strategyContext,
-    contextLink,
-    contextPdfUrl,
-    landingPageType: landingPage.type, // 'type' in LandingPage model
-    leadCapture: landingPage.leadCapture, // Lead capture object
-    headline: landingPage.headline,
-    subheadline: landingPage.subheadline,
-    cta: landingPage.ctaText, // 'ctaText' in LandingPage model
-    hook: landingPage.hook,
-    messagingAngle: landingPage.angle,
-    platform: landingPage.platform,
-    completedBy,
-    testerId: testerId, // Tester for design review
-    marketerId: marketerId // Marketer for design approval
-  });
-  designTask.status = 'design_pending'; // Ready for UI/UX Designer to start
-  tasks.push(designTask);
+  const lpType = landingPage.type || landingPage.funnelType || 'video_sales_letter';
+  const leadCaptureMethod = landingPage.leadCaptureMethod || landingPage.leadCapture?.method || 'form';
 
-  // Landing page development task (will be activated after design is approved by marketer)
+  // Create design tasks for each assigned designer
+  // Flow: design_pending → design_submitted → (Tester reviews) → design_approved → (Marketer reviews) → development_pending
+  for (const designerId of designerIds) {
+    const designTask = createTask({
+      projectId,
+      organizationId: project.organizationId,
+      landingPageId: landingPage._id,
+      creativeStrategyId,
+      taskType: 'landing_page_design',
+      assetType: 'landing_page_design',
+      taskTitle: `Design: ${landingPage.name || 'Landing Page'}`,
+      assignedRole: 'ui_ux_designer',
+      assignedTo: designerId,
+      strategyContext: {
+        ...strategyContext,
+        funnelStage: lpType, // Landing page type (video_sales_letter, lead_generation, etc.)
+        creativeType: 'landing_page_design',
+        landingPageType: lpType,
+        leadCapture: landingPage.leadCapture || null,
+        leadCaptureMethod: leadCaptureMethod
+      },
+      contextLink,
+      contextPdfUrl,
+      landingPageType: lpType, // 'type' in LandingPage model
+      leadCapture: landingPage.leadCapture, // Lead capture object
+      headline: landingPage.headline,
+      subheadline: landingPage.subheadline,
+      cta: landingPage.ctaText, // 'ctaText' in LandingPage model
+      hook: landingPage.hook,
+      messagingAngle: landingPage.angle,
+      platform: landingPage.platform,
+      completedBy,
+      testerIds: testerIds, // Testers for design review (array)
+      marketerId: marketerId // Marketer for design approval
+    });
+    designTask.status = 'design_pending'; // Ready for UI/UX Designer to start
+    tasks.push(designTask);
+    console.log(`Created design task for designer: ${designerId}`);
+  }
+
+  // If no designers assigned, create an unassigned design task
+  if (designerIds.length === 0) {
+    const designTask = createTask({
+      projectId,
+      organizationId: project.organizationId,
+      landingPageId: landingPage._id,
+      creativeStrategyId,
+      taskType: 'landing_page_design',
+      assetType: 'landing_page_design',
+      taskTitle: `Design: ${landingPage.name || 'Landing Page'}`,
+      assignedRole: 'ui_ux_designer',
+      assignedTo: null,
+      strategyContext: {
+        ...strategyContext,
+        funnelStage: lpType,
+        creativeType: 'landing_page_design',
+        landingPageType: lpType,
+        leadCapture: landingPage.leadCapture || null,
+        leadCaptureMethod: leadCaptureMethod
+      },
+      contextLink,
+      contextPdfUrl,
+      landingPageType: lpType,
+      leadCapture: landingPage.leadCapture,
+      headline: landingPage.headline,
+      subheadline: landingPage.subheadline,
+      cta: landingPage.ctaText,
+      hook: landingPage.hook,
+      messagingAngle: landingPage.angle,
+      platform: landingPage.platform,
+      completedBy,
+      testerIds: testerIds,
+      marketerId: marketerId
+    });
+    designTask.status = 'design_pending';
+    tasks.push(designTask);
+    console.log('Created unassigned design task (no designers assigned)');
+  }
+
+  // Create development tasks for each assigned developer
   // Flow: development_pending → development_submitted → (Tester reviews) → development_approved → (Marketer approves) → final_approved
   // IMPORTANT: Developer is NOT assigned here. They will be assigned when design is approved.
-  const devTask = createTask({
-    projectId,
-    organizationId: project.organizationId,
-    landingPageId: landingPage._id,
-    creativeStrategyId,
-    taskType: 'landing_page_development',
-    assetType: 'landing_page_page',
-    taskTitle: `Develop: ${landingPage.name || 'Landing Page'}`,
-    assignedRole: 'developer',
-    assignedTo: null, // Developer will be assigned when design is approved
-    strategyContext,
-    contextLink,
-    contextPdfUrl,
-    landingPageType: landingPage.type, // 'type' in LandingPage model
-    completedBy,
-    testerId: testerId, // Tester for development review
-    marketerId: marketerId, // Marketer for final approval
-    parentTaskId: null // Will be linked to design task after saving
-  });
-  devTask.status = 'development_pending'; // Waiting for design to be approved
-  devTask.description = 'This task will become active after the design is approved by the tester and marketer.';
-
-  // Store developer ID for later assignment when design is approved
-  if (developer) {
-    devTask.developerId = developer;
+  for (const developerId of developerIds) {
+    const devTask = createTask({
+      projectId,
+      organizationId: project.organizationId,
+      landingPageId: landingPage._id,
+      creativeStrategyId,
+      taskType: 'landing_page_development',
+      assetType: 'landing_page_page',
+      taskTitle: `Develop: ${landingPage.name || 'Landing Page'}`,
+      assignedRole: 'developer',
+      assignedTo: null, // Developer will be assigned when design is approved
+      strategyContext: {
+        ...strategyContext,
+        funnelStage: lpType, // Landing page type (video_sales_letter, lead_generation, etc.)
+        creativeType: 'landing_page_development',
+        landingPageType: lpType,
+        leadCapture: landingPage.leadCapture || null,
+        leadCaptureMethod: leadCaptureMethod
+      },
+      contextLink,
+      contextPdfUrl,
+      landingPageType: lpType, // 'type' in LandingPage model
+      leadCapture: landingPage.leadCapture, // Lead capture object
+      completedBy,
+      testerIds: testerIds, // Testers for development review (array)
+      marketerId: marketerId, // Marketer for final approval
+      parentTaskId: null // Will be linked to design task after saving
+    });
+    devTask.status = 'development_pending'; // Waiting for design to be approved
+    devTask.description = 'This task will become active after the design is approved by the tester and marketer.';
+    // Store developer ID for later assignment when design is approved
+    devTask.developerId = developerId;
+    tasks.push(devTask);
+    console.log(`Created development task for developer: ${developerId}`);
   }
-  tasks.push(devTask);
+
+  // If no developers assigned, create an unassigned development task
+  if (developerIds.length === 0) {
+    const devTask = createTask({
+      projectId,
+      organizationId: project.organizationId,
+      landingPageId: landingPage._id,
+      creativeStrategyId,
+      taskType: 'landing_page_development',
+      assetType: 'landing_page_page',
+      taskTitle: `Develop: ${landingPage.name || 'Landing Page'}`,
+      assignedRole: 'developer',
+      assignedTo: null,
+      strategyContext: {
+        ...strategyContext,
+        funnelStage: lpType,
+        creativeType: 'landing_page_development',
+        landingPageType: lpType,
+        leadCapture: landingPage.leadCapture || null,
+        leadCaptureMethod: leadCaptureMethod
+      },
+      contextLink,
+      contextPdfUrl,
+      landingPageType: lpType,
+      leadCapture: landingPage.leadCapture,
+      completedBy,
+      testerIds: testerIds,
+      marketerId: marketerId,
+      parentTaskId: null
+    });
+    devTask.status = 'development_pending';
+    devTask.description = 'This task will become active after the design is approved by the tester and marketer.';
+    tasks.push(devTask);
+    console.log('Created unassigned development task (no developers assigned)');
+  }
 
   return tasks;
+}
+
+/**
+ * Update existing tasks when creative plan items are modified
+ * This prevents duplicate tasks when name, role, or aiFramework changes
+ */
+async function updateExistingCreativePlanTasks(creativePlanItems, existingTasksByItemId, project, creativeStrategyId) {
+  try {
+    console.log('\n=== UPDATING EXISTING CREATIVE PLAN TASKS ===');
+
+    // Helper function to get team member(s) for a role
+    const getTeamMembersForRole = (role) => {
+      const roleFieldMap = {
+        'content_writer': { arrayField: 'contentWriters', legacyField: 'contentWriter' },
+        'graphic_designer': { arrayField: 'graphicDesigners', legacyField: 'graphicDesigner' },
+        'video_editor': { arrayField: 'videoEditors', legacyField: 'videoEditor' },
+        'ui_ux_designer': { arrayField: 'uiUxDesigners', legacyField: 'uiUxDesigner' },
+        'developer': { arrayField: 'developers', legacyField: 'developer' },
+        'tester': { arrayField: 'testers', legacyField: 'tester' },
+        'performance_marketer': { arrayField: 'performanceMarketers', legacyField: 'performanceMarketer' }
+      };
+
+      const fieldConfig = roleFieldMap[role];
+      if (!fieldConfig) return null;
+
+      // Check new array field first (preferred)
+      const arrayMembers = project.assignedTeam?.[fieldConfig.arrayField];
+      if (arrayMembers && Array.isArray(arrayMembers) && arrayMembers.length > 0) {
+        return arrayMembers;
+      }
+
+      // Fall back to legacy field
+      const legacyMember = project.assignedTeam?.[fieldConfig.legacyField];
+      if (legacyMember) {
+        return [legacyMember];
+      }
+
+      return null;
+    };
+
+    // Get default team members
+    const defaultContentWriters = getTeamMembersForRole('content_writer');
+    const defaultTesters = getTeamMembersForRole('tester');
+    const defaultMarketer = getTeamMembersForRole('performance_marketer');
+
+    // Get tester IDs (support multiple testers)
+    let testerIds = [];
+    if (defaultTesters && defaultTesters.length > 0) {
+      testerIds = defaultTesters.map(t => t._id || t);
+    }
+    let marketerId = null;
+    if (defaultMarketer && defaultMarketer.length > 0) {
+      marketerId = defaultMarketer[0]._id || defaultMarketer[0];
+    }
+
+    let updatedCount = 0;
+
+    for (const item of creativePlanItems) {
+      const itemId = item._id.toString();
+      const itemTasks = existingTasksByItemId.get(itemId);
+
+      if (!itemTasks) continue;
+
+      // Build updated task title
+      const taskTitle = item.name || item.subType || item.adType || 'Creative';
+      const creativeType = item.creativeType || item.category || 'IMAGE';
+
+      // Determine design role based on creative type
+      const designRoleForTask = creativeType === 'VIDEO' ? 'video_editor' : 'graphic_designer';
+
+      // Get assigned team members from plan item
+      let assignedTeamMemberIds = item.assignedTeamMembers || [];
+      if (assignedTeamMemberIds && !Array.isArray(assignedTeamMemberIds)) {
+        assignedTeamMemberIds = [assignedTeamMemberIds];
+      }
+      assignedTeamMemberIds = assignedTeamMemberIds
+        .filter(id => id != null)
+        .map(id => {
+          if (typeof id === 'object' && id._id) return id._id.toString();
+          return id.toString ? id.toString() : String(id);
+        });
+
+      // Resolve designer assignment
+      const assignedRole = item.assignedRole || designRoleForTask;
+      let designAssignedTo = null;
+      let contentAssignedTo = null;
+
+      // Get designer assignment
+      if (assignedRole === 'graphic_designer') {
+        const roleMembers = getTeamMembersForRole('graphic_designer');
+        if (assignedTeamMemberIds.length > 0) {
+          designAssignedTo = assignedTeamMemberIds[0];
+        } else if (roleMembers && roleMembers.length > 0) {
+          designAssignedTo = roleMembers[0]._id || roleMembers[0];
+        }
+      } else if (assignedRole === 'video_editor') {
+        const roleMembers = getTeamMembersForRole('video_editor');
+        if (assignedTeamMemberIds.length > 0) {
+          designAssignedTo = assignedTeamMemberIds[0];
+        } else if (roleMembers && roleMembers.length > 0) {
+          designAssignedTo = roleMembers[0]._id || roleMembers[0];
+        }
+      }
+
+      // Get content writer assignment - support both new array field and legacy single field
+      let contentWriterIds = [];
+
+      // First check for new array field
+      if (item.contentWriters && Array.isArray(item.contentWriters) && item.contentWriters.length > 0) {
+        contentWriterIds = item.contentWriters.map(w => {
+          if (typeof w === 'object' && w._id) {
+            return w._id.toString();
+          }
+          return w.toString ? w.toString() : String(w);
+        });
+        console.log(`Update: Using creative-specific contentWriters: ${contentWriterIds.join(', ')}`);
+      } else if (item.contentWriter) {
+        // Fall back to legacy single field
+        const legacyWriter = item.contentWriter;
+        const writerId = typeof legacyWriter === 'object' && legacyWriter._id
+          ? legacyWriter._id.toString()
+          : legacyWriter.toString ? legacyWriter.toString() : String(legacyWriter);
+        contentWriterIds = [writerId];
+        console.log(`Update: Using legacy contentWriter: ${writerId}`);
+      } else if (defaultContentWriters && defaultContentWriters.length > 0) {
+        // Fall back to project-level Content Planners
+        contentWriterIds = defaultContentWriters.map(w => {
+          if (typeof w === 'object' && w._id) {
+            return w._id.toString();
+          }
+          return w.toString ? w.toString() : String(w);
+        });
+        console.log(`Update: Using project-level contentWriters: ${contentWriterIds.join(', ')}`);
+      }
+
+      // For backward compatibility with single content task, use first writer
+      if (contentWriterIds.length > 0) {
+        contentAssignedTo = contentWriterIds[0];
+      }
+
+      // Handle assignedTesters from creative plan - use creative-specific testers if available
+      let creativeTesters = [];
+      if (item.assignedTesters && Array.isArray(item.assignedTesters) && item.assignedTesters.length > 0) {
+        // Use creative-specific testers
+        creativeTesters = item.assignedTesters.map(t => {
+          if (typeof t === 'object' && t._id) {
+            return t._id.toString();
+          }
+          return t.toString ? t.toString() : String(t);
+        });
+        console.log(`Update: Using creative-specific testers: ${creativeTesters.join(', ')}`);
+      } else {
+        // Fall back to project-level testers
+        creativeTesters = testerIds;
+        console.log(`Update: Using project-level testers: ${creativeTesters.join(', ')}`);
+      }
+
+      const platformStr = (item.platforms || []).join(', ');
+      const screenSizesStr = (item.screenSizes || []).join(', ');
+
+      // Update content task if exists
+      if (itemTasks.contentTask) {
+        const contentTask = await Task.findById(itemTasks.contentTask._id);
+        if (contentTask) {
+          // Update fields that may have changed
+          contentTask.taskTitle = `Content: ${taskTitle}`;
+          contentTask.strategyContext = {
+            ...contentTask.strategyContext,
+            creativeType: item.subType || item.adType || taskTitle,
+            creativeCategory: creativeType,
+            platforms: item.platforms || [],
+            notes: item.notes || ''
+          };
+          contentTask.contentFramework = item.aiFramework || '';
+          contentTask.contentSubCategory = item.aiSubCategory || '';
+          contentTask.aiFramework = item.aiFramework || '';
+          contentTask.platform = platformStr;
+          contentTask.notes = item.notes || '';
+          contentTask.objective = item.objective || '';
+
+          // Update assignment if changed
+          if (contentAssignedTo && contentTask.assignedTo?.toString() !== contentAssignedTo) {
+            console.log(`Updating content task assignment from ${contentTask.assignedTo} to ${contentAssignedTo}`);
+            contentTask.assignedTo = contentAssignedTo;
+          }
+
+          // Update testers/marketer if changed - use creative-specific testers
+          if (creativeTesters.length > 0) {
+            contentTask.testerIds = creativeTesters;
+            console.log(`Updated content task testers to: ${creativeTesters.join(', ')}`);
+          }
+          if (marketerId) contentTask.marketerId = marketerId;
+
+          await contentTask.save();
+          updatedCount++;
+          console.log(`Updated content task for "${taskTitle}"`);
+        }
+      }
+
+      // Update design task if exists
+      if (itemTasks.designTask) {
+        const designTask = await Task.findById(itemTasks.designTask._id);
+        if (designTask) {
+          // Update fields that may have changed
+          designTask.taskTitle = taskTitle;
+          designTask.strategyContext = {
+            ...designTask.strategyContext,
+            creativeType: item.subType || item.adType || taskTitle,
+            creativeCategory: creativeType,
+            platforms: item.platforms || [],
+            notes: item.notes || ''
+          };
+          designTask.aiFramework = item.aiFramework || '';
+          designTask.platform = platformStr;
+          designTask.notes = item.notes || '';
+          designTask.objective = item.objective || '';
+
+          // Update designer assignment (stored in designerId field, assigned when content is approved)
+          if (designAssignedTo) {
+            designTask.designerId = designAssignedTo;
+          }
+
+          // Update testers/marketer if changed - use creative-specific testers
+          if (creativeTesters.length > 0) {
+            designTask.testerIds = creativeTesters;
+            console.log(`Updated design task testers to: ${creativeTesters.join(', ')}`);
+          }
+          if (marketerId) designTask.marketerId = marketerId;
+
+          await designTask.save();
+          updatedCount++;
+          console.log(`Updated design task for "${taskTitle}"`);
+        }
+      }
+    }
+
+    console.log(`=== Updated ${updatedCount} existing tasks ===\n`);
+    return updatedCount;
+  } catch (error) {
+    console.error('Error updating existing creative plan tasks:', error);
+    return 0;
+  }
 }
 
 /**
@@ -759,16 +1250,18 @@ async function generateCreativePlanTasks(creativePlan, projectId, creativeStrate
   const defaultTesters = getTeamMembersForRole('tester');
   const defaultMarketer = getTeamMembersForRole('performance_marketer');
 
-  // Get tester ID (single tester per project) - with organization validation
-  let testerId = null;
+  // Get tester IDs (support multiple testers) - with organization validation
+  let testerIds = [];
   if (defaultTesters && defaultTesters.length > 0) {
-    const potentialTesterId = defaultTesters[0]._id || defaultTesters[0];
-    // Verify tester belongs to the project's organization
-    const isValidTester = await verifyUserBelongsToOrg(potentialTesterId, project.organizationId);
-    if (isValidTester) {
-      testerId = potentialTesterId;
-    } else {
-      console.warn(`WARNING: Tester ${potentialTesterId} does not belong to organization ${project.organizationId}. Skipping tester assignment.`);
+    for (const tester of defaultTesters) {
+      const potentialTesterId = tester._id || tester;
+      // Verify tester belongs to the project's organization
+      const isValidTester = await verifyUserBelongsToOrg(potentialTesterId, project.organizationId);
+      if (isValidTester) {
+        testerIds.push(potentialTesterId);
+      } else {
+        console.warn(`WARNING: Tester ${potentialTesterId} does not belong to organization ${project.organizationId}. Skipping tester assignment.`);
+      }
     }
   }
 
@@ -789,7 +1282,7 @@ async function generateCreativePlanTasks(creativePlan, projectId, creativeStrate
     contentWriters: defaultContentWriters?.map(m => m?._id || m),
     graphicDesigners: defaultGraphicDesigners?.map(m => m?._id || m),
     videoEditors: defaultVideoEditors?.map(m => m?._id || m),
-    tester: testerId,
+    testers: testerIds,
     marketer: marketerId,
     organizationId: project.organizationId
   });
@@ -908,33 +1401,71 @@ async function generateCreativePlanTasks(creativePlan, projectId, creativeStrate
       }
     }
 
-    // For content task - use contentWriter from creative plan if specified, otherwise use project-level Content Planners
-    const creativeContentWriter = planItem.contentWriter;
-    if (creativeContentWriter) {
-      // Use the specific Content Planner assigned to this creative
-      contentAssignedTo = creativeContentWriter._id || creativeContentWriter;
-      console.log(`Content task assigned to creative's contentWriter: ${contentAssignedTo}`);
+    // For content task - use contentWriters array from creative plan if specified, otherwise use project-level Content Planners
+    // Support both new array field (contentWriters) and legacy single field (contentWriter)
+    let contentWriterIds = [];
+
+    // First check for new array field
+    if (planItem.contentWriters && Array.isArray(planItem.contentWriters) && planItem.contentWriters.length > 0) {
+      contentWriterIds = planItem.contentWriters.map(w => {
+        if (typeof w === 'object' && w._id) {
+          return w._id.toString();
+        }
+        return w.toString ? w.toString() : String(w);
+      });
+      console.log(`Creative-specific contentWriters: ${contentWriterIds.join(', ')}`);
+    } else if (planItem.contentWriter) {
+      // Fall back to legacy single field
+      const legacyWriter = planItem.contentWriter;
+      const writerId = typeof legacyWriter === 'object' && legacyWriter._id
+        ? legacyWriter._id.toString()
+        : legacyWriter.toString ? legacyWriter.toString() : String(legacyWriter);
+      contentWriterIds = [writerId];
+      console.log(`Using legacy contentWriter: ${writerId}`);
     } else if (defaultContentWriters && defaultContentWriters.length > 0) {
       // Fall back to project-level Content Planners
-      contentAssignedTo = defaultContentWriters[0]._id || defaultContentWriters[0];
-      console.log(`Content task assigned to project's default contentWriter: ${contentAssignedTo}`);
+      contentWriterIds = defaultContentWriters.map(w => {
+        if (typeof w === 'object' && w._id) {
+          return w._id.toString();
+        }
+        return w.toString ? w.toString() : String(w);
+      });
+      console.log(`Using project-level contentWriters: ${contentWriterIds.join(', ')}`);
     } else {
       console.log(`No content_writer available`);
     }
 
-    // Content writing task (first in workflow) - assigned to content_writer
+    // Handle assignedTesters from creative plan - support multiple testers per creative
+    let creativeTesters = [];
+    if (planItem.assignedTesters && Array.isArray(planItem.assignedTesters) && planItem.assignedTesters.length > 0) {
+      // Use creative-specific testers
+      creativeTesters = planItem.assignedTesters.map(t => {
+        if (typeof t === 'object' && t._id) {
+          return t._id.toString();
+        }
+        return t.toString ? t.toString() : String(t);
+      });
+      console.log(`Creative-specific testers: ${creativeTesters.join(', ')}`);
+    } else {
+      // Fall back to project-level testers
+      creativeTesters = testerIds;
+    }
+
+    // Content writing task (first in workflow) - assigned to content_writer(s)
     // Flow: content_pending → content_submitted → (Tester reviews) → content_final_approved → Designer gets assigned
-    if (contentAssignedTo) {
+    // Create a content task for EACH content writer in the array
+    for (const writerId of contentWriterIds) {
       const contentTask = createTask({
         projectId,
         organizationId: project.organizationId,
         creativeStrategyId,
+        creativePlanItemId: planItem._id, // Link to creative plan item for updates
         taskType: taskConfig.contentTask,
         assetType: `${taskConfig.assetType}_content`,
         creativeOutputType: taskConfig.creativeOutputType,
         taskTitle: `Content: ${taskTitle}`,
         assignedRole: 'content_writer',
-        assignedTo: contentAssignedTo,
+        assignedTo: writerId,
         strategyContext,
         contextLink,
         contextPdfUrl,
@@ -946,7 +1477,7 @@ async function generateCreativePlanTasks(creativePlan, projectId, creativeStrate
         creativeCategory: creativeType,
         objective: planItem.objective || '',
         completedBy,
-        testerId: testerId, // Tester for content review
+        testerIds: creativeTesters, // Testers for content review (array)
         marketerId: marketerId, // Marketer for content approval
         contentFramework: planItem.aiFramework || '', // Framework for content planner
         contentSubCategory: planItem.aiSubCategory || '', // Subcategory for content planner
@@ -954,7 +1485,7 @@ async function generateCreativePlanTasks(creativePlan, projectId, creativeStrate
       });
       contentTask.status = 'content_pending';
       tasks.push(contentTask);
-      console.log(`Created content task assigned to: ${contentAssignedTo}, tester: ${testerId}, marketer: ${marketerId}`);
+      console.log(`Created content task assigned to: ${writerId}, testers: ${creativeTesters.join(', ')}, marketer: ${marketerId}`);
     }
 
     // Design/Edit task - assigned based on creative type or specified role
@@ -972,6 +1503,7 @@ async function generateCreativePlanTasks(creativePlan, projectId, creativeStrate
       projectId,
       organizationId: project.organizationId,
       creativeStrategyId,
+      creativePlanItemId: planItem._id, // Link to creative plan item for updates
       taskType: taskConfig.designTask,
       assetType: taskConfig.assetType,
       creativeOutputType: taskConfig.creativeOutputType,
@@ -989,7 +1521,7 @@ async function generateCreativePlanTasks(creativePlan, projectId, creativeStrate
       creativeCategory: creativeType,
       objective: planItem.objective || '',
       completedBy,
-      testerId: testerId, // Tester for design/video review
+      testerIds: creativeTesters, // Testers for design/video review (array)
       marketerId: marketerId, // Marketer for final approval
       aiFramework: planItem.aiFramework || '' // AI Framework for designers/editors
     });
@@ -1004,7 +1536,7 @@ async function generateCreativePlanTasks(creativePlan, projectId, creativeStrate
     // Note: parentTaskId will be set after tasks are saved, to link design to content
     tasks.push(designTask);
 
-    console.log(`Created design task (designer will be assigned after content approval). Intended designer: ${designAssignedTo}, tester: ${testerId}, marketer: ${marketerId}`);
+    console.log(`Created design task (designer will be assigned after content approval). Intended designer: ${designAssignedTo}, testers: ${creativeTesters.join(', ')}, marketer: ${marketerId}`);
   }
 
   console.log(`Generated ${tasks.length} tasks from creative plan with ${creativePlan.length} items`);
@@ -1018,6 +1550,7 @@ function createTask({
   projectId,
   organizationId,
   creativeStrategyId = null,
+  creativePlanItemId = null,
   landingPageId = null,
   adTypeKey = null,
   adTypeName = null,
@@ -1044,7 +1577,7 @@ function createTask({
   landingPageType = '',
   leadCapture = null,
   completedBy,
-  testerId = null,
+  testerIds = [],
   marketerId = null,
   parentTaskId = null,
   contentFramework = '',
@@ -1108,6 +1641,11 @@ function createTask({
       // Offer information
       offer: strategyContext.valueProposition || '',
 
+      // Landing page specific
+      landingPageType: landingPageType || '',
+      leadCapture: leadCapture || null,
+      leadCaptureMethod: leadCapture?.method || '',
+
       // Additional context
       notes: notes || '',
       adTypeKey: adTypeKey,
@@ -1125,6 +1663,10 @@ function createTask({
     task.adTypeKey = adTypeKey;
   }
 
+  if (creativePlanItemId) {
+    task.creativePlanItemId = creativePlanItemId;
+  }
+
   if (landingPageId) {
     task.landingPageId = landingPageId;
   }
@@ -1133,9 +1675,9 @@ function createTask({
     task.creativeOutputType = creativeOutputType;
   }
 
-  // Assign tester for review workflow
-  if (testerId) {
-    task.testerId = testerId;
+  // Assign testers for review workflow (support multiple testers)
+  if (testerIds && testerIds.length > 0) {
+    task.testerIds = testerIds;
   }
 
   // Assign performance marketer for final approval
@@ -1625,7 +2167,10 @@ async function updateCreativePlanTaskAssignments(projectId, creativeStrategy, pr
     for (const item of creativePlan) {
       const key = item.name || item.subType || item.adType || `Creative ${creativePlan.indexOf(item) + 1}`;
       planItemMap.set(key, item);
-      console.log(`Plan item: "${key}" -> contentWriter: ${item.contentWriter?._id || item.contentWriter || 'none'}`);
+      // Log both new array field and legacy single field
+      const writers = item.contentWriters?.map(w => w?._id || w).join(', ') || 'none';
+      const legacyWriter = item.contentWriter?._id || item.contentWriter || 'none';
+      console.log(`Plan item: "${key}" -> contentWriters: [${writers}], contentWriter (legacy): ${legacyWriter}`);
     }
 
     let updatedCount = 0;
@@ -1646,12 +2191,18 @@ async function updateCreativePlanTaskAssignments(projectId, creativeStrategy, pr
           console.log(`Task "${task.taskTitle}" matched to plan item "${matchingKey}" via fuzzy match`);
           const planItem = planItemMap.get(matchingKey);
 
-          // Determine the content writer to assign
+          // Determine the content writer to assign - support both new array and legacy single field
           let newContentWriterId = null;
 
-          if (planItem.contentWriter) {
-            // Use the specific content planner from the plan item
-            // Handle both ObjectId and populated user object
+          // First check for new array field (contentWriters)
+          if (planItem.contentWriters && Array.isArray(planItem.contentWriters) && planItem.contentWriters.length > 0) {
+            // Use the first content writer from the array (for single task compatibility)
+            const firstWriter = planItem.contentWriters[0];
+            newContentWriterId = typeof firstWriter === 'object' && firstWriter._id
+              ? firstWriter._id.toString()
+              : firstWriter.toString ? firstWriter.toString() : String(firstWriter);
+          } else if (planItem.contentWriter) {
+            // Fall back to legacy single field
             newContentWriterId = typeof planItem.contentWriter === 'object'
               ? planItem.contentWriter._id?.toString() || planItem.contentWriter.toString()
               : planItem.contentWriter.toString();
@@ -1683,12 +2234,18 @@ async function updateCreativePlanTaskAssignments(projectId, creativeStrategy, pr
         continue;
       }
 
-      // Determine the content writer to assign
+      // Determine the content writer to assign - support both new array and legacy single field
       let newContentWriterId = null;
 
-      if (planItem.contentWriter) {
-        // Use the specific content planner from the plan item
-        // Handle both ObjectId and populated user object
+      // First check for new array field (contentWriters)
+      if (planItem.contentWriters && Array.isArray(planItem.contentWriters) && planItem.contentWriters.length > 0) {
+        // Use the first content writer from the array (for single task compatibility)
+        const firstWriter = planItem.contentWriters[0];
+        newContentWriterId = typeof firstWriter === 'object' && firstWriter._id
+          ? firstWriter._id.toString()
+          : firstWriter.toString ? firstWriter.toString() : String(firstWriter);
+      } else if (planItem.contentWriter) {
+        // Fall back to legacy single field
         newContentWriterId = typeof planItem.contentWriter === 'object'
           ? planItem.contentWriter._id?.toString() || planItem.contentWriter.toString()
           : planItem.contentWriter.toString();
@@ -1713,6 +2270,49 @@ async function updateCreativePlanTaskAssignments(projectId, creativeStrategy, pr
         updatedCount++;
       } else {
         console.log(`Task "${task.taskTitle}" already assigned correctly`);
+      }
+
+      // Update testerIds if assignedTesters changed on the creative plan item
+      if (planItem.assignedTesters && Array.isArray(planItem.assignedTesters) && planItem.assignedTesters.length > 0) {
+        const newTesterIds = planItem.assignedTesters.map(t => {
+          if (typeof t === 'object' && t._id) return t._id.toString();
+          return t.toString ? t.toString() : String(t);
+        });
+        const currentTesterIds = (task.testerIds || []).map(id => id.toString());
+        const testersChanged = newTesterIds.length !== currentTesterIds.length ||
+          !newTesterIds.every(id => currentTesterIds.includes(id));
+        if (testersChanged) {
+          console.log(`Updating task "${task.taskTitle}" testers from [${currentTesterIds.join(', ')}] to [${newTesterIds.join(', ')}]`);
+          task.testerIds = newTesterIds;
+          await task.save();
+        }
+      }
+    }
+
+    // Also update testerIds on design tasks for this creative strategy
+    const existingDesignTasks = await Task.find({
+      projectId,
+      creativeStrategyId: creativeStrategy._id,
+      taskType: { $in: ['graphic_design', 'video_editing'] }
+    });
+
+    for (const designTask of existingDesignTasks) {
+      const creativeName = designTask.taskTitle.replace('Design: ', '').replace('Edit: ', '').trim();
+      const planItem = planItemMap.get(creativeName);
+
+      if (planItem && planItem.assignedTesters && Array.isArray(planItem.assignedTesters) && planItem.assignedTesters.length > 0) {
+        const newTesterIds = planItem.assignedTesters.map(t => {
+          if (typeof t === 'object' && t._id) return t._id.toString();
+          return t.toString ? t.toString() : String(t);
+        });
+        const currentTesterIds = (designTask.testerIds || []).map(id => id.toString());
+        const testersChanged = newTesterIds.length !== currentTesterIds.length ||
+          !newTesterIds.every(id => currentTesterIds.includes(id));
+        if (testersChanged) {
+          console.log(`Updating design task "${designTask.taskTitle}" testers from [${currentTesterIds.join(', ')}] to [${newTesterIds.join(', ')}]`);
+          designTask.testerIds = newTesterIds;
+          await designTask.save();
+        }
       }
     }
 

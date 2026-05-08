@@ -202,7 +202,7 @@
 
 /* Enhanced Card Styles with Shadows - Responsive padding */
 .enhanced-card {
-  @apply bg-white rounded-2xl border border-gray-100;
+  @apply bg-white rounded-xl border border-gray-100;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   transition: all 0.2s ease;
 }
@@ -214,7 +214,7 @@
 
 /* Enhanced Stat Card with Icon - Responsive */
 .stat-card-enhanced {
-  @apply relative overflow-hidden bg-white rounded-2xl p-4 sm:p-6 border border-gray-100;
+  @apply relative overflow-hidden bg-white rounded-2xl p-4 sm:p-5 border border-gray-100;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   transition: all 0.2s ease;
 }
@@ -260,7 +260,7 @@
 
 /* Chart Container Enhanced - Responsive */
 .chart-container-enhanced {
-  @apply bg-white rounded-2xl p-4 sm:p-6 border border-gray-100;
+  @apply bg-white rounded-2xl p-4 sm:p-5 border border-gray-100;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   transition: all 0.2s ease;
 }
@@ -407,7 +407,6 @@
 @media (max-width: 640px) {
   button, a, [role="button"] {
     min-height: 44px;
-    min-width: 44px;
   }
 
   /* Disable hover effects on touch devices */
@@ -436,6 +435,70 @@
   .modal-content {
     margin: 1rem;
     max-height: calc(100vh - 2rem);
+  }
+}
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile scrollbar with proper spacing for iOS */
+@supports (-webkit-touch-callout: none) {
+  /* iOS-specific styles */
+  .overflow-x-hidden {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Add padding at bottom on iOS to prevent scrollbar overlap */
+  main {
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+  }
+}
+
+/* Mobile-friendly scrollbar with spacing */
+@media (max-width: 640px) {
+  /* Custom scrollbar for mobile with better visibility */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  /* Add visual spacing below scrollable content on mobile */
+  .stat-card-enhanced,
+  .project-card-enhanced,
+  .task-card-enhanced,
+  .kanban-column {
+    margin-bottom: 12px;
+  }
+
+  /* Ensure main content has padding at bottom for scrollbar visibility */
+  main {
+    padding-bottom: 24px !important;
+  }
+}
+
+/* Prevent scrollbar overlap on mobile devices */
+@media (max-width: 768px) {
+  body {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Space below cards for scrollbar visibility */
+  .space-y-4 > *:last-child,
+  .space-y-6 > *:last-child {
+    margin-bottom: 16px;
+  }
+
+  /* Ensure scrollable containers have padding */
+  .overflow-x-auto {
+    padding-bottom: 8px;
+    margin-bottom: 8px;
   }
 }
 

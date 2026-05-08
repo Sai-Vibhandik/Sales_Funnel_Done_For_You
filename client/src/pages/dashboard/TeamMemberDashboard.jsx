@@ -191,23 +191,23 @@ export default function TeamMemberDashboard({ user }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
       {/* Welcome Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
             {roleConfig.title}
           </h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-gray-600 mt-1 text-sm sm:text-base truncate">
             Welcome back, {user?.name?.split(' ')[0] || 'Team Member'}! Here's your work overview.
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => navigate('/dashboard/projects')}>
+          <Button variant="secondary" onClick={() => navigate('/dashboard/projects')} className="flex-1 sm:flex-none">
             <FolderKanban className="w-4 h-4 mr-2" />
             Projects
           </Button>
-          <Button onClick={() => navigate('/dashboard/tasks')}>
+          <Button onClick={() => navigate('/dashboard/tasks')} className="flex-1 sm:flex-none">
             <Clock className="w-4 h-4 mr-2" />
             My Tasks
           </Button>
@@ -215,58 +215,58 @@ export default function TeamMemberDashboard({ user }) {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <Card>
-          <CardBody className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Assigned Projects</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+          <CardBody className="p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-gray-500 font-medium">Assigned Projects</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
               </div>
-              <div className={`p-3 bg-${roleConfig.color}-100 rounded-lg`}>
-                <Icon className={`w-6 h-6 text-${roleConfig.color}-600`} />
+              <div className={`p-2 sm:p-3 bg-${roleConfig.color}-100 rounded-lg flex-shrink-0`}>
+                <Icon className={`w-5 h-5 sm:w-6 sm:h-6 text-${roleConfig.color}-600`} />
               </div>
             </div>
           </CardBody>
         </Card>
 
         <Card>
-          <CardBody className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Active Projects</p>
-                <p className="text-2xl font-bold text-green-600">{stats.active}</p>
+          <CardBody className="p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-gray-500 font-medium">Active Projects</p>
+                <p className="text-xl sm:text-2xl font-bold text-green-600 mt-1">{stats.active}</p>
               </div>
-              <div className="p-3 bg-green-100 rounded-lg">
-                <Play className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardBody className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Pending Tasks</p>
-                <p className="text-2xl font-bold text-orange-600">{stats.pendingTasks}</p>
-              </div>
-              <div className="p-3 bg-orange-100 rounded-lg">
-                <Clock className="w-6 h-6 text-orange-600" />
+              <div className="p-2 sm:p-3 bg-green-100 rounded-lg flex-shrink-0">
+                <Play className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
               </div>
             </div>
           </CardBody>
         </Card>
 
         <Card>
-          <CardBody className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">In Progress</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.inProgressTasks}</p>
+          <CardBody className="p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-gray-500 font-medium">Pending Tasks</p>
+                <p className="text-xl sm:text-2xl font-bold text-orange-600 mt-1">{stats.pendingTasks}</p>
               </div>
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Send className="w-6 h-6 text-blue-600" />
+              <div className="p-2 sm:p-3 bg-orange-100 rounded-lg flex-shrink-0">
+                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600" />
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardBody className="p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-gray-500 font-medium">In Progress</p>
+                <p className="text-xl sm:text-2xl font-bold text-blue-600 mt-1">{stats.inProgressTasks}</p>
+              </div>
+              <div className="p-2 sm:p-3 bg-blue-100 rounded-lg flex-shrink-0">
+                <Send className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
               </div>
             </div>
           </CardBody>
@@ -411,10 +411,6 @@ export default function TeamMemberDashboard({ user }) {
                   </div>
 
                   <div className="mb-3">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">Progress</span>
-                      <span className="font-medium">{project.overallProgress}%</span>
-                    </div>
                     <ProgressBar
                       value={project.overallProgress}
                       size="sm"

@@ -34,9 +34,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// Role options with icons and colors
+// Role options with icons and colors (platform_admin excluded - only system can assign)
 const ROLE_OPTIONS = [
-  { value: 'platform_admin', label: 'Platform Admin', icon: Shield, color: 'bg-gradient-to-br from-purple-600 to-violet-700', lightColor: 'bg-purple-50 text-purple-700' },
   { value: 'admin', label: 'Admin', icon: Crown, color: 'bg-gradient-to-br from-red-500 to-rose-600', lightColor: 'bg-red-50 text-red-600' },
   { value: 'performance_marketer', label: 'Performance Marketer', icon: TrendingUp, color: 'bg-gradient-to-br from-blue-500 to-indigo-600', lightColor: 'bg-blue-50 text-blue-600' },
   { value: 'content_writer', label: 'Content Planner', icon: FileText, color: 'bg-gradient-to-br from-emerald-500 to-teal-600', lightColor: 'bg-emerald-50 text-emerald-600' },
@@ -383,7 +382,7 @@ function TeamMemberModal({ isOpen, onClose, member, onSave }) {
           name: '',
           email: '',
           password: '',
-          role: 'performance_marketer',
+          role: '',
           specialization: '',
           availability: 'available',
           projectId: '',
@@ -637,8 +636,7 @@ function DeleteConfirmModal({ isOpen, onClose, member, onDeactivate, onPermanent
             </p>
 
             <div className="space-y-3">
-              {/* Deactivate Option */}
-              <button
+              {/* <button
                 onClick={handleDeactivate}
                 disabled={deactivating || deleting}
                 className={cn(
@@ -658,7 +656,7 @@ function DeleteConfirmModal({ isOpen, onClose, member, onDeactivate, onPermanent
                 <span className="text-sm font-medium text-gray-600">
                   {deactivating ? 'Deactivating...' : 'Select'}
                 </span>
-              </button>
+              </button> */}
 
               {/* Permanent Delete Option */}
               <button
@@ -756,7 +754,16 @@ export default function TeamManagementPage() {
         );
       }
 
-      setTeamMembers(members);
+      // Sort members: organization admins (role='admin') first, then others
+      const sortedMembers = members.sort((a, b) => {
+        const aIsAdmin = a.role === 'admin';
+        const bIsAdmin = b.role === 'admin';
+        if (aIsAdmin && !bIsAdmin) return -1;
+        if (!aIsAdmin && bIsAdmin) return 1;
+        return 0;
+      });
+
+      setTeamMembers(sortedMembers);
     } catch (error) {
       toast.error('Failed to load team members');
     } finally {
@@ -890,67 +897,67 @@ export default function TeamManagementPage() {
         </div>
       </div>
 
-      {/* Stats Grid — 2 cols on mobile, 4 on lg */}
-      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      {/* Stats Grid — 2 cols on mobile/tablet, 4 on xl */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
         <div className="stat-card-enhanced">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
               <p className="text-sm text-gray-500 font-medium">Total Members</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{stats.total}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">{stats.total}</p>
               <div className="flex items-center gap-1 mt-2">
                 <span className="text-sm font-medium text-green-600">{stats.activePercentage}%</span>
                 <span className="text-xs text-gray-400">active rate</span>
               </div>
             </div>
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-primary-400 to-primary-600">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-primary-400 to-primary-600 flex-shrink-0">
               <Users size={24} className="text-white" />
             </div>
           </div>
         </div>
 
         <div className="stat-card-enhanced">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
               <p className="text-sm text-gray-500 font-medium">Active Members</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalActive}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">{stats.totalActive}</p>
               <div className="flex items-center gap-1 mt-2">
                 <ArrowUpRight size={16} className="text-green-500" />
                 <span className="text-sm font-medium text-green-600">Active</span>
               </div>
             </div>
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-green-400 to-green-600">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-green-400 to-green-600 flex-shrink-0">
               <UserCheck size={24} className="text-white" />
             </div>
           </div>
         </div>
 
         <div className="stat-card-enhanced">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
               <p className="text-sm text-gray-500 font-medium">Inactive Members</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalInactive}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">{stats.totalInactive}</p>
               <div className="flex items-center gap-1 mt-2">
                 <span className="text-sm text-gray-500">Deactivated</span>
               </div>
             </div>
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-gray-400 to-gray-600">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-gray-400 to-gray-600 flex-shrink-0">
               <Clock size={24} className="text-white" />
             </div>
           </div>
         </div>
 
         <div className="stat-card-enhanced">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
               <p className="text-sm text-gray-500 font-medium">Team Roles</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">
                 {new Set(teamMembers.filter(m => m.isActive).map(m => m.role)).size}
               </p>
               <div className="flex items-center gap-1 mt-2">
                 <span className="text-sm text-gray-500">Different roles</span>
               </div>
             </div>
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-purple-400 to-purple-600">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-purple-400 to-purple-600 flex-shrink-0">
               <Shield size={24} className="text-white" />
             </div>
           </div>
@@ -958,9 +965,9 @@ export default function TeamManagementPage() {
       </div>
 
       {/* Team Members & Distribution Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Team Members List */}
-        <div className="lg:col-span-2">
+        <div className="xl:col-span-2">
           {/* Filter Bar */}
           <div className="enhanced-card p-4 mb-4">
             <div className="flex flex-wrap items-center gap-3">
@@ -1020,10 +1027,10 @@ export default function TeamManagementPage() {
         </div>
 
         {/* Team by Role */}
-        <div className="chart-container-enhanced">
+        <div className="chart-container-enhanced h-fit xl:h-auto">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary-400 to-primary-500">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary-400 to-primary-500 flex-shrink-0">
                 <Star size={18} className="text-white" />
               </div>
               <div>
@@ -1038,13 +1045,13 @@ export default function TeamManagementPage() {
               const Icon = role.icon;
               return (
                 <div key={role.value} className="flex items-center gap-3">
-                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", role.lightColor)}>
+                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0", role.lightColor)}>
                     <Icon size={18} />
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-gray-700">{role.label}</span>
-                      <span className="text-sm font-semibold text-gray-900">{count}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <span className="text-sm font-medium text-gray-700 truncate">{role.label}</span>
+                      <span className="text-sm font-semibold text-gray-900 flex-shrink-0">{count}</span>
                     </div>
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div

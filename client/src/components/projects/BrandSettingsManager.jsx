@@ -2,9 +2,24 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { brandSettingsService } from '@/services/api';
 import {
-  Upload, Palette, Type, FileText, Image, Trash2, Download, Loader2, RefreshCw
+  Upload, Palette, Type, FileText, Image, Trash2, Download, Loader2, RefreshCw, ExternalLink
 } from 'lucide-react';
 import { Card, CardBody, CardHeader, Button, Input, Spinner } from '@/components/ui';
+
+// Get the API base URL with fallback
+const getApiBaseUrl = () => {
+  // Support both Vite and Create React App environment variables
+  return import.meta.env?.VITE_API_URL || process.env.REACT_APP_API_URL || 'http://localhost:5000';
+};
+
+// Utility function to get brand manual URL - always use API endpoint
+const getBrandManualUrl = (brandManual, projectId) => {
+  if (!brandManual || !projectId) return null;
+
+  // Always use our API endpoint - server handles both local and Cloudinary files
+  const baseUrl = getApiBaseUrl();
+  return `${baseUrl}/api/brand-settings/${projectId}/manual/file`;
+};
 
 // Common font families
 const FONT_FAMILIES = [
@@ -35,9 +50,7 @@ export default function BrandSettingsManager({ projectId, onSave }) {
   });
 
   const [logos, setLogos] = useState({
-    primary: null,
-    secondary: null,
-    favicon: null
+    logo: null
   });
 
   const [brandManual, setBrandManual] = useState(null);
@@ -62,7 +75,7 @@ export default function BrandSettingsManager({ projectId, onSave }) {
           setTypography(prev => ({ ...prev, ...response.data.typography }));
         }
         if (response.data.logos) {
-          setLogos(response.data.logos);
+          setLogos({ logo: response.data.logos.primary || null });
         }
         if (response.data.brandManual) {
           setBrandManual(response.data.brandManual);
@@ -115,7 +128,7 @@ export default function BrandSettingsManager({ projectId, onSave }) {
     }
   };
 
-  const handleLogoUpload = async (e, logoType) => {
+  const handleLogoUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -127,12 +140,13 @@ export default function BrandSettingsManager({ projectId, onSave }) {
 
     try {
       setSaving(true);
-      const response = await brandSettingsService.uploadLogo(projectId, file, logoType);
-      setLogos(response.data.logos);
-      toast.success(`${logoType} logo uploaded successfully`);
+      const response = await brandSettingsService.uploadLogo(projectId, file, 'primary');
+      setLogos({ logo: response.data.logos.primary || null });
+      toast.success('Logo uploaded successfully');
     } catch (error) {
       console.error('Error uploading logo:', error);
-      toast.error('Failed to upload logo');
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to upload logo';
+      toast.error(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -215,12 +229,12 @@ export default function BrandSettingsManager({ projectId, onSave }) {
     }
   };
 
-  const handleDeleteLogo = async (logoType) => {
-    if (!confirm(`Are you sure you want to delete the ${logoType} logo?`)) return;
+  const handleDeleteLogo = async () => {
+    if (!confirm('Are you sure you want to delete the logo?')) return;
 
     try {
-      await brandSettingsService.deleteLogo(projectId, logoType);
-      setLogos(prev => ({ ...prev, [logoType]: null }));
+      await brandSettingsService.deleteLogo(projectId, 'primary');
+      setLogos({ logo: null });
       toast.success('Logo deleted');
     } catch (error) {
       console.error('Error deleting logo:', error);
@@ -280,14 +294,54 @@ export default function BrandSettingsManager({ projectId, onSave }) {
                     </>
                   )}
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open(brandManual.filePath, '_blank')}
+                <button
+                  onClick={async () => {
+                    try {
+                      const url = getBrandManualUrl(brandManual, projectId);
+                      const response = await fetch(url);
+                      if (!response.ok) {
+                        const data = await response.json();
+                        toast.error(data.message || 'Failed to load brand manual');
+                        return;
+                      }
+                      window.open(url, '_blank');
+                    } catch (error) {
+                      toast.error('Failed to open brand manual');
+                    }
+                  }}
+                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  View
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const url = getBrandManualUrl(brandManual, projectId);
+                      const response = await fetch(url);
+                      if (!response.ok) {
+                        const data = await response.json();
+                        toast.error(data.message || 'Failed to load brand manual');
+                        return;
+                      }
+                      const blob = await response.blob();
+                      const downloadUrl = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = downloadUrl;
+                      a.download = brandManual.fileName || 'brand-manual.pdf';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      window.URL.revokeObjectURL(downloadUrl);
+                    } catch (error) {
+                      toast.error('Failed to download brand manual');
+                    }
+                  }}
+                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
                 >
                   <Download className="w-4 h-4 mr-2" />
-                  View
-                </Button>
+                  Download
+                </button>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -406,50 +460,46 @@ export default function BrandSettingsManager({ projectId, onSave }) {
             Brand Logo
           </h3>
           <p className="text-sm text-gray-500 mt-1">
-            Upload your brand logos (PNG, JPG, or WEBP)
+            Upload your brand logo (PNG, JPG, or WEBP)
           </p>
         </CardHeader>
         <CardBody>
-          <div className="grid ">
-            {[''].map(logoType => (
-              <div key={logoType} className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700 text-center capitalize">
-                  {logoType} Logo
-                </label>
-                {logos[logoType]?.filePath ? (
-                  <div className="relative">
-                    <img
-                      src={logos[logoType].filePath}
-                      alt={`${logoType} logo`}
-                      className="w-full h-32 object-contain border border-gray-200 rounded-lg bg-gray-50 p-2"
-                    />
-                    <button
-                      onClick={() => handleDeleteLogo(logoType)}
-                      className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-                    <input
-                      type="file"
-                      id={`logo-${logoType}`}
-                      accept="image/png,image/jpeg,image/jpg,image/webp"
-                      onChange={(e) => handleLogoUpload(e, logoType)}
-                      className="hidden"
-                    />
-                    <label
-                      htmlFor={`logo-${logoType}`}
-                      className="cursor-pointer flex flex-col items-center"
-                    >
-                      <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                      <span className="text-sm text-gray-500">Upload {logoType} logo</span>
-                    </label>
-                  </div>
-                )}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700 text-center">
+              Logo
+            </label>
+            {logos.logo?.filePath ? (
+              <div className="relative">
+                <img
+                  src={logos.logo.filePath}
+                  alt="logo"
+                  className="w-full h-32 object-contain border border-gray-200 rounded-lg bg-gray-50 p-2"
+                />
+                <button
+                  onClick={handleDeleteLogo}
+                  className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
-            ))}
+            ) : (
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                <input
+                  type="file"
+                  id="logo"
+                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="logo"
+                  className="cursor-pointer flex flex-col items-center"
+                >
+                  <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                  <span className="text-sm text-gray-500">Upload logo</span>
+                </label>
+              </div>
+            )}
           </div>
         </CardBody>
       </Card>

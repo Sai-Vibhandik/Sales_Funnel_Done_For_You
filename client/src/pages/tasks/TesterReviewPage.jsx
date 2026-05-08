@@ -1,12 +1,28 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 import { Card, CardBody, Button, Spinner, Textarea, Badge } from '@/components/ui';
 import { taskService } from '@/services/api';
 import {
   Clock, CheckCircle, XCircle, Eye, FileText, Palette, Video, Layout, Code,
   AlertCircle, ExternalLink, Link, MessageSquare, FileIcon, ArrowLeft, ExternalLink as ExternalLinkIcon
 } from 'lucide-react';
+
+// Utility function to ensure URLs have proper protocol
+const normalizeUrl = (url) => {
+  if (!url) return url;
+  // If already has protocol, return as-is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  // If it looks like a URL (has a dot or starts with www), add https://
+  if (url.includes('.') || url.startsWith('www.')) {
+    return `https://${url}`;
+  }
+  // Otherwise return as-is (could be a relative path or invalid)
+  return url;
+};
 
 const TASK_TYPES = {
   graphic_design: { label: 'Graphic Design', icon: Palette },
@@ -25,8 +41,12 @@ const STATUS_LABELS = {
 export default function TesterReviewPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const highlightedTaskId = location.state?.taskId;
   const highlightedRef = useRef(null);
+
+  // Check if user is organization admin (view-only)
+  const isAdmin = user?.role === 'admin';
 
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState([]);
@@ -189,7 +209,7 @@ export default function TesterReviewPage() {
                           Creative Link
                         </h4>
                         <a
-                          href={task.creativeLink}
+                          href={normalizeUrl(task.creativeLink)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -246,7 +266,7 @@ export default function TesterReviewPage() {
                               Content Link
                             </h4>
                             <a
-                              href={task.contentLink}
+                              href={normalizeUrl(task.contentLink)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-green-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -331,7 +351,7 @@ export default function TesterReviewPage() {
                               Design Link
                             </h4>
                             <a
-                              href={task.designLink}
+                              href={normalizeUrl(task.designLink)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-purple-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -419,7 +439,7 @@ export default function TesterReviewPage() {
                               Landing Page URL
                             </h4>
                             <a
-                              href={task.implementationUrl}
+                              href={normalizeUrl(task.implementationUrl)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-green-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -438,7 +458,7 @@ export default function TesterReviewPage() {
                               Repository Link
                             </h4>
                             <a
-                              href={task.repoLink}
+                              href={normalizeUrl(task.repoLink)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -503,23 +523,33 @@ export default function TesterReviewPage() {
                       <Eye className="w-4 h-4 mr-1" />
                       View Full Details
                     </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleApprove(task)}
-                      className="bg-green-600 hover:bg-green-700"
-                    >
-                      <CheckCircle className="w-4 h-4 mr-1" />
-                      Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => openRejectionModal(task)}
-                      className="text-red-600 border-red-300 hover:bg-red-50"
-                    >
-                      <XCircle className="w-4 h-4 mr-1" />
-                      Reject
-                    </Button>
+                    {/* Admin users are view-only */}
+                    {isAdmin ? (
+                      <div className="text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-lg text-center">
+                        <Eye className="w-4 h-4 inline mr-1" />
+                        View Only
+                      </div>
+                    ) : (
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={() => handleApprove(task)}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => openRejectionModal(task)}
+                          className="text-red-600 border-red-300 hover:bg-red-50"
+                        >
+                          <XCircle className="w-4 h-4 mr-1" />
+                          Reject
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </CardBody>

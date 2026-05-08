@@ -42,10 +42,10 @@ function StatCard({ title, value, change, changeType, icon: Icon, iconBg }) {
   const isPositive = changeType === 'positive';
   return (
     <div className="stat-card-enhanced">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
           <p className="text-sm text-gray-500 font-medium">{title}</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">{value}</p>
           {change && (
             <div className="flex items-center gap-1 mt-2">
               {isPositive ? (
@@ -60,7 +60,7 @@ function StatCard({ title, value, change, changeType, icon: Icon, iconBg }) {
             </div>
           )}
         </div>
-        <div className={cn('p-3 rounded-2xl', iconBg)}>
+        <div className={cn('p-3 rounded-2xl flex-shrink-0', iconBg)}>
           <Icon size={24} className="text-white" />
         </div>
       </div>
@@ -349,26 +349,27 @@ export default function ContentWriterDashboard({ user }) {
   const needsAttention = getTasksNeedingAttention();
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-4 sm:space-y-6 animate-fadeIn overflow-x-hidden">
       {/* Welcome Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600">
-            <FileText size={24} className="text-white" />
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex-shrink-0">
+            <FileText size={20} className="text-white sm:hidden" />
+            <FileText size={24} className="text-white hidden sm:block" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Content Planner Dashboard</h1>
-            <p className="text-gray-500 mt-1">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">Content Planner Dashboard</h1>
+            <p className="text-gray-500 mt-1 text-sm sm:text-base truncate">
               Welcome back, {user?.name?.split(' ')[0] || 'Writer'}! Here's your content creation overview.
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => navigate('/dashboard/projects')}>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Button variant="outline" onClick={() => navigate('/dashboard/projects')} className="flex-1 sm:flex-none">
             <FolderKanban size={18} className="mr-2" />
             Projects
           </Button>
-          <Button onClick={() => navigate('/dashboard/tasks')}>
+          <Button onClick={() => navigate('/dashboard/tasks')} className="flex-1 sm:flex-none">
             <PenTool size={18} className="mr-2" />
             My Tasks
           </Button>
@@ -376,52 +377,94 @@ export default function ContentWriterDashboard({ user }) {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <StatCard
-          title="Total Content Tasks"
-          value={String(stats.totalTasks)}
-          icon={FileText}
-          iconBg="bg-gradient-to-br from-emerald-400 to-emerald-600"
-        />
-        <StatCard
-          title="Pending"
-          value={String(stats.pendingContent)}
-          change={stats.pendingContent > 0 ? `${stats.pendingContent} awaiting` : null}
-          changeType="neutral"
-          icon={Clock}
-          iconBg="bg-gradient-to-br from-yellow-400 to-yellow-600"
-        />
-        <StatCard
-          title="Under Review"
-          value={String(stats.reviewContent)}
-          change={stats.reviewContent > 0 ? 'With tester' : null}
-          changeType="neutral"
-          icon={Eye}
-          iconBg="bg-gradient-to-br from-blue-400 to-blue-600"
-        />
-        <StatCard
-          title="Completed"
-          value={String(stats.completedContent)}
-          change={stats.completedContent > 0 ? '+this week' : null}
-          changeType="positive"
-          icon={CheckCircle}
-          iconBg="bg-gradient-to-br from-green-400 to-green-600"
-        />
-        <StatCard
-          title="Rejected"
-          value={String(stats.rejectedContent)}
-          change={stats.rejectedContent > 0 ? 'Needs revision' : null}
-          changeType="negative"
-          icon={XCircle}
-          iconBg="bg-gradient-to-br from-red-400 to-red-600"
-        />
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5 lg:gap-6">
+        <div className="stat-card-enhanced">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-gray-500 font-medium">Total Content Tasks</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">{String(stats.totalTasks)}</p>
+            </div>
+            <div className="p-3 rounded-2xl flex-shrink-0 bg-gradient-to-br from-emerald-400 to-emerald-600">
+              <FileText size={24} className="text-white" />
+            </div>
+          </div>
+        </div>
+
+        <div className="stat-card-enhanced">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-gray-500 font-medium">Pending</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">{String(stats.pendingContent)}</p>
+              {stats.pendingContent > 0 && (
+                <div className="flex items-center gap-1 mt-2">
+                  <span className="text-sm text-gray-500">{stats.pendingContent} awaiting</span>
+                </div>
+              )}
+            </div>
+            <div className="p-3 rounded-2xl flex-shrink-0 bg-gradient-to-br from-yellow-400 to-yellow-600">
+              <Clock size={24} className="text-white" />
+            </div>
+          </div>
+        </div>
+
+        <div className="stat-card-enhanced">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-gray-500 font-medium">Under Review</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">{String(stats.reviewContent)}</p>
+              {stats.reviewContent > 0 && (
+                <div className="flex items-center gap-1 mt-2">
+                  <span className="text-sm text-gray-500">With tester</span>
+                </div>
+              )}
+            </div>
+            <div className="p-3 rounded-2xl flex-shrink-0 bg-gradient-to-br from-blue-400 to-blue-600">
+              <Eye size={24} className="text-white" />
+            </div>
+          </div>
+        </div>
+
+        <div className="stat-card-enhanced">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-gray-500 font-medium">Completed</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">{String(stats.completedContent)}</p>
+              {stats.completedContent > 0 && (
+                <div className="flex items-center gap-1 mt-2">
+                  <ArrowUpRight size={16} className="text-green-500" />
+                  <span className="text-sm font-medium text-green-600">this week</span>
+                </div>
+              )}
+            </div>
+            <div className="p-3 rounded-2xl flex-shrink-0 bg-gradient-to-br from-green-400 to-green-600">
+              <CheckCircle size={24} className="text-white" />
+            </div>
+          </div>
+        </div>
+
+        <div className="stat-card-enhanced">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-gray-500 font-medium">Rejected</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">{String(stats.rejectedContent)}</p>
+              {stats.rejectedContent > 0 && (
+                <div className="flex items-center gap-1 mt-2">
+                  <span className="text-sm text-red-600">Needs revision</span>
+                </div>
+              )}
+            </div>
+            <div className="p-3 rounded-2xl flex-shrink-0 bg-gradient-to-br from-red-400 to-red-600">
+              <XCircle size={24} className="text-white" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 sm:gap-6">
         {/* Pie Chart - Content Status */}
-        <div className="lg:col-span-1 chart-container-enhanced">
-          <div className="flex items-center gap-3 mb-4">
+        <div className="xl:col-span-1 chart-container-enhanced h-full flex flex-col">
+          <div className="flex items-center gap-3 mb-4 flex-shrink-0">
             <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-500">
               <PieChartIcon size={20} className="text-white" />
             </div>
@@ -432,7 +475,7 @@ export default function ContentWriterDashboard({ user }) {
           </div>
 
           {/* Custom legend */}
-          <div className="flex flex-wrap gap-x-4 gap-y-2 mb-4">
+          <div className="flex flex-wrap gap-x-4 gap-y-2 mb-4 flex-shrink-0">
             {taskStatusData.map((item, i) => (
               <div key={i} className="flex items-center gap-1.5">
                 <span
@@ -446,7 +489,7 @@ export default function ContentWriterDashboard({ user }) {
           </div>
 
           {stats.totalTasks > 0 ? (
-            <div className="h-52">
+            <div className="flex-1 min-h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -478,7 +521,7 @@ export default function ContentWriterDashboard({ user }) {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-52 flex items-center justify-center text-sm text-gray-400">
+            <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
               <div className="text-center">
                 <AlertCircle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                 <p>No content progress data</p>
@@ -488,8 +531,8 @@ export default function ContentWriterDashboard({ user }) {
         </div>
 
         {/* Bar Chart - Tasks per Project */}
-        <div className="lg:col-span-2 chart-container-enhanced">
-          <div className="flex items-center justify-between mb-6">
+        <div className="xl:col-span-2 chart-container-enhanced h-full flex flex-col">
+          <div className="flex items-center justify-between mb-6 flex-shrink-0">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-400 to-blue-500">
                 <BarChart3 size={20} className="text-white" />
@@ -499,7 +542,7 @@ export default function ContentWriterDashboard({ user }) {
                 <p className="text-sm text-gray-500">Status breakdown</p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-4">
               <div className="flex items-center gap-1.5">
                 <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500" />
                 <span className="text-xs text-gray-500">Completed</span>
@@ -520,7 +563,7 @@ export default function ContentWriterDashboard({ user }) {
           </div>
 
           {tasksPerProjectData.length > 0 ? (
-            <div style={{ height: `${Math.max(tasksPerProjectData.length * 42 + 60, 180)}px` }}>
+            <div className="flex-1 min-h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={tasksPerProjectData}
@@ -577,7 +620,7 @@ export default function ContentWriterDashboard({ user }) {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-48 flex items-center justify-center text-sm text-gray-400">
+            <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
               <div className="text-center">
                 <FolderKanban className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                 <p>No project data available</p>
@@ -717,30 +760,30 @@ export default function ContentWriterDashboard({ user }) {
       </div> */}
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <button
           onClick={() => navigate('/dashboard/tasks')}
-          className="p-4 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl text-white text-left hover:shadow-lg transition-all duration-200"
+          className="p-4 sm:p-5 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl sm:rounded-2xl text-white text-left hover:shadow-lg transition-all duration-200 flex flex-col min-h-[100px] sm:min-h-[120px]"
         >
-          <PenTool size={24} className="mb-2" />
-          <p className="font-semibold">View All Tasks</p>
-          <p className="text-sm text-white/80 mt-1">See all your writing assignments</p>
+          <PenTool size={20} className="mb-2 sm:w-6 sm:h-6 flex-shrink-0" />
+          <p className="font-semibold text-sm sm:text-base">View All Tasks</p>
+          <p className="text-xs sm:text-sm text-white/80 mt-1">See all your writing assignments</p>
         </button>
         <button
           onClick={() => navigate('/dashboard/projects')}
-          className="enhanced-card p-4 text-gray-900 text-left"
+          className="enhanced-card p-4 sm:p-5 text-gray-900 text-left flex flex-col min-h-[100px] sm:min-h-[120px]"
         >
-          <FolderKanban size={24} className="mb-2 text-primary-500" />
-          <p className="font-semibold">My Projects</p>
-          <p className="text-sm text-gray-500 mt-1">View assigned projects</p>
+          <FolderKanban size={20} className="mb-2 text-primary-500 sm:w-6 sm:h-6 flex-shrink-0" />
+          <p className="font-semibold text-sm sm:text-base">My Projects</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">View assigned projects</p>
         </button>
         <button
           onClick={() => navigate('/dashboard/tasks?status=pending')}
-          className="enhanced-card p-4 text-gray-900 text-left"
+          className="enhanced-card p-4 sm:p-5 text-gray-900 text-left flex flex-col min-h-[100px] sm:min-h-[120px]"
         >
-          <Edit size={24} className="mb-2 text-yellow-500" />
-          <p className="font-semibold">Start Writing</p>
-          <p className="text-sm text-gray-500 mt-1">Continue pending content</p>
+          <Edit size={20} className="mb-2 text-yellow-500 sm:w-6 sm:h-6 flex-shrink-0" />
+          <p className="font-semibold text-sm sm:text-base">Start Writing</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">Continue pending content</p>
         </button>
       </div>
 

@@ -9,6 +9,7 @@ const emailService = require('../services/emailService');
 const MarketResearch = require('../models/MarketResearch');
 const Offer = require('../models/Offer');
 const TrafficStrategy = require('../models/TrafficStrategy');
+const { buildUrl } = require('../utils/urlHelper');
 
 // Helper to emit notification (will be set from index.js)
 let io = null;
@@ -120,6 +121,28 @@ const generateLandingPageTasksIfAssigned = async (project, landingPage, userId) 
       return [];
     }
 
+    // Get landing-page-specific testers, fall back to project-level testers
+    const landingPageTesters = (landingPage.assignedTesters && landingPage.assignedTesters.length > 0)
+      ? landingPage.assignedTesters.map(t => t._id || t)
+      : (project.assignedTeam?.testers?.length > 0)
+        ? project.assignedTeam.testers.map(t => t._id || t)
+        : project.assignedTeam?.tester
+          ? [project.assignedTeam.tester._id || project.assignedTeam.tester]
+          : [];
+
+    // Get performance marketer
+    const marketerId = project.assignedTeam?.performanceMarketers?.[0]?._id ||
+                      project.assignedTeam?.performanceMarketers?.[0] ||
+                      project.assignedTeam?.performanceMarketer?._id ||
+                      project.assignedTeam?.performanceMarketer ||
+                      null;
+
+    console.log(`Generating tasks for landing page: ${landingPage.name}`);
+    console.log(`Assigned Designer: ${assignedDesignerId}`);
+    console.log(`Assigned Developer: ${assignedDeveloperId}`);
+    console.log(`Landing Page Testers: ${landingPageTesters.join(', ')}`);
+    console.log(`Marketer: ${marketerId}`);
+
     // Get strategy context for AI prompt generation
     const [marketResearch, offer, trafficStrategy] = await Promise.all([
       MarketResearch.findOne({ projectId: project._id }),
@@ -143,7 +166,7 @@ const generateLandingPageTasksIfAssigned = async (project, landingPage, userId) 
     };
 
     const tasks = [];
-    const contextLink = `${process.env.CLIENT_URL}/landing-page-strategy?projectId=${project._id}&landingPageId=${landingPage._id}`;
+    const contextLink = buildUrl(`/landing-page-strategy?projectId=${project._id}&landingPageId=${landingPage._id}`);
 
     // Create design task if designer is assigned
     if (assignedDesignerId) {
@@ -160,7 +183,9 @@ const generateLandingPageTasksIfAssigned = async (project, landingPage, userId) 
         createdBy: userId,
         status: 'design_pending',
         strategyContext,
-        contextLink
+        contextLink,
+        testerIds: landingPageTesters,
+        marketerId: marketerId
       };
       tasks.push(designTask);
     }
@@ -182,7 +207,9 @@ const generateLandingPageTasksIfAssigned = async (project, landingPage, userId) 
         status: 'development_pending',
         description: 'This task will become active after the design is approved.',
         strategyContext,
-        contextLink
+        contextLink,
+        testerIds: landingPageTesters,
+        marketerId: marketerId
       };
       tasks.push(devTask);
     }
@@ -360,7 +387,16 @@ exports.getProject = async (req, res, next) => {
       .populate('assignedTeam.uiUxDesigner', 'name email specialization avatar')
       .populate('assignedTeam.graphicDesigner', 'name email specialization avatar')
       .populate('assignedTeam.developer', 'name email specialization avatar')
-      .populate('assignedTeam.tester', 'name email specialization avatar');
+      .populate('assignedTeam.tester', 'name email specialization avatar')
+      // Populate landing pages team assignments
+      .populate('landingPages.assignedDesigners', 'name email specialization avatar')
+      .populate('landingPages.assignedDevelopers', 'name email specialization avatar')
+      .populate('landingPages.assignedContentWriters', 'name email specialization avatar')
+      .populate('landingPages.assignedGraphicDesigners', 'name email specialization avatar')
+      .populate('landingPages.assignedVideoEditors', 'name email specialization avatar')
+      .populate('landingPages.assignedTesters', 'name email specialization avatar')
+      .populate('landingPages.assignedDesigner', 'name email specialization avatar')
+      .populate('landingPages.assignedDeveloper', 'name email specialization avatar');
 
     if (!project) {
       return res.status(404).json({ success: false, message: 'Project not found' });
@@ -562,6 +598,25 @@ exports.assignTeam = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
+    // Validate required roles
+    const performanceMarketerId = (performanceMarketers && performanceMarketers[0]) || performanceMarketer;
+    // const hasTester = (testers && testers.length > 0) || tester; // Commented out for now
+
+    if (!performanceMarketerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Performance Marketer is required. Please select a Performance Marketer for this project.'
+      });
+    }
+
+    // Commented out tester validation for now
+    // if (!hasTester) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: 'Tester is required. Please select at least one Tester for this project.'
+    //   });
+    // }
+
     const allUserIds = [
       ...(performanceMarketers || []),
       ...(contentWriters || []),
@@ -595,8 +650,8 @@ exports.assignTeam = async (req, res, next) => {
     let performanceMarketersArray = performanceMarketers || [];
     if (performanceMarketersArray.length > 1) performanceMarketersArray = [performanceMarketersArray[0]];
 
+    // Testers can be multiple - no limit
     let testersArray = testers || [];
-    if (testersArray.length > 1) testersArray = [testersArray[0]];
 
     project.assignedTeam = {
       performanceMarketers: performanceMarketersArray,
@@ -617,6 +672,53 @@ exports.assignTeam = async (req, res, next) => {
     };
 
     await project.save();
+
+    // Update existing tasks with new team assignments
+    // Only update tasks that don't have specific testers/marketers assigned
+    console.log('=== assignTeam: Updating existing tasks with new team members ===');
+
+    // Build tester IDs array (project-level testers)
+    const projectTesterIds = testersArray.map(t => t.toString());
+    const projectMarketerId = performanceMarketersArray[0]?.toString() || null;
+
+    // Update tasks that don't have specific testers assigned
+    if (projectTesterIds.length > 0) {
+      // Update tasks where testerIds is empty or not set (meaning they should use project-level testers)
+      const tasksUpdateResult = await Task.updateMany(
+        {
+          projectId: project._id,
+          status: { $in: ['todo', 'in_progress', 'content_pending', 'design_pending', 'development_pending', 'content_submitted', 'design_submitted', 'development_submitted'] },
+          $or: [
+            { testerIds: { $exists: false } },
+            { testerIds: { $size: 0 } }
+          ]
+        },
+        {
+          $set: { testerIds: projectTesterIds }
+        }
+      );
+      console.log(`Updated ${tasksUpdateResult.modifiedCount} tasks with new project-level testers`);
+    }
+
+    // Update tasks with new marketer
+    if (projectMarketerId) {
+      const marketerUpdateResult = await Task.updateMany(
+        {
+          projectId: project._id,
+          status: { $in: ['approved_by_tester', 'todo', 'in_progress', 'content_pending', 'design_pending', 'development_pending'] },
+          $or: [
+            { marketerId: { $exists: false } },
+            { marketerId: null }
+          ]
+        },
+        {
+          $set: { marketerId: projectMarketerId }
+        }
+      );
+      console.log(`Updated ${marketerUpdateResult.modifiedCount} tasks with new project-level marketer`);
+    }
+
+    console.log('=== assignTeam: Task update complete ===');
 
     const allAssignedIds = new Set();
     const addIds = (ids) => {
@@ -945,7 +1047,11 @@ exports.addLandingPage = async (req, res, next) => {
     const {
       name, funnelType, platform, hook, angle, cta, offer,
       messaging, leadCaptureMethod, headline, subheadline,
-      assignedDesigner, assignedDeveloper
+      // Legacy single fields
+      assignedDesigner, assignedDeveloper,
+      // New array fields for multi-select
+      assignedDesigners, assignedDevelopers, assignedContentWriters,
+      assignedGraphicDesigners, assignedVideoEditors, assignedTesters
     } = req.body;
 
     // ─────────────────────────────────────────────────────────────────────
@@ -953,7 +1059,9 @@ exports.addLandingPage = async (req, res, next) => {
     // ─────────────────────────────────────────────────────────────────────
     const project = await Project.findOne({ _id: id, organizationId: req.organizationId })
       .populate('assignedTeam.performanceMarketers', '_id')
-      .populate('assignedTeam.performanceMarketer', '_id');
+      .populate('assignedTeam.performanceMarketer', '_id')
+      .populate('assignedTeam.testers', '_id')
+      .populate('assignedTeam.tester', '_id');
 
     if (!project) {
       return res.status(404).json({ success: false, message: 'Project not found' });
@@ -978,8 +1086,16 @@ exports.addLandingPage = async (req, res, next) => {
       leadCaptureMethod: leadCaptureMethod || 'form',
       headline: headline || '',
       subheadline: subheadline || '',
-      assignedDesigner: assignedDesigner || null,
-      assignedDeveloper: assignedDeveloper || null,
+      // Legacy single fields (use first element from arrays for backward compatibility)
+      assignedDesigner: assignedDesigner || (assignedDesigners && assignedDesigners[0]) || null,
+      assignedDeveloper: assignedDeveloper || (assignedDevelopers && assignedDevelopers[0]) || null,
+      // New array fields for multi-select
+      assignedDesigners: assignedDesigners || [],
+      assignedDevelopers: assignedDevelopers || [],
+      assignedContentWriters: assignedContentWriters || [],
+      assignedGraphicDesigners: assignedGraphicDesigners || [],
+      assignedVideoEditors: assignedVideoEditors || [],
+      assignedTesters: assignedTesters || [],
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -994,7 +1110,10 @@ exports.addLandingPage = async (req, res, next) => {
     const addedLandingPage = project.landingPages[project.landingPages.length - 1];
 
     // Generate tasks if team assignments are provided
-    if (assignedDesigner || assignedDeveloper) {
+    const hasAssignments = (assignedDesigners && assignedDesigners.length > 0) ||
+                          (assignedDevelopers && assignedDevelopers.length > 0) ||
+                          assignedDesigner || assignedDeveloper;
+    if (hasAssignments) {
       await generateLandingPageTasksIfAssigned(project, addedLandingPage, req.user._id);
     }
 
@@ -1066,7 +1185,11 @@ exports.updateLandingPage = async (req, res, next) => {
     const {
       name, funnelType, platform, hook, angle, cta, offer,
       messaging, leadCaptureMethod, headline, subheadline,
-      assignedDesigner, assignedDeveloper
+      // Legacy single fields
+      assignedDesigner, assignedDeveloper,
+      // New array fields for multi-select
+      assignedDesigners, assignedDevelopers, assignedContentWriters,
+      assignedGraphicDesigners, assignedVideoEditors, assignedTesters
     } = req.body;
 
     // FIX: populate so isPerformanceMarketer() works correctly
@@ -1085,12 +1208,18 @@ exports.updateLandingPage = async (req, res, next) => {
     if (!landingPage) return res.status(404).json({ success: false, message: 'Landing page not found' });
 
     // Track if team assignments changed
-    const oldDesignerId = landingPage.assignedDesigner?._id?.toString() || landingPage.assignedDesigner?.toString();
-    const oldDeveloperId = landingPage.assignedDeveloper?._id?.toString() || landingPage.assignedDeveloper?.toString();
+    const oldDesignerIds = (landingPage.assignedDesigners || []).map(d => d?._id?.toString() || d?.toString());
+    const oldDeveloperIds = (landingPage.assignedDevelopers || []).map(d => d?._id?.toString() || d?.toString());
+    const oldTesterIds = (landingPage.assignedTesters || []).map(t => t?._id?.toString() || t?.toString());
+
+    // Legacy single assignment fields (for backward compatibility)
+    const oldDesignerId = landingPage.assignedDesigner?._id?.toString() || landingPage.assignedDesigner?.toString() || null;
+    const oldDeveloperId = landingPage.assignedDeveloper?._id?.toString() || landingPage.assignedDeveloper?.toString() || null;
 
     const teamAssignmentChanged =
-      (assignedDesigner !== undefined && assignedDesigner !== oldDesignerId) ||
-      (assignedDeveloper !== undefined && assignedDeveloper !== oldDeveloperId);
+      (assignedDesigners !== undefined && JSON.stringify(assignedDesigners.map(String).sort()) !== JSON.stringify(oldDesignerIds.sort())) ||
+      (assignedDevelopers !== undefined && JSON.stringify(assignedDevelopers.map(String).sort()) !== JSON.stringify(oldDeveloperIds.sort())) ||
+      (assignedTesters !== undefined && JSON.stringify(assignedTesters.map(String).sort()) !== JSON.stringify(oldTesterIds.sort()));
 
     if (name !== undefined) landingPage.name = name;
     if (funnelType !== undefined) landingPage.funnelType = funnelType;
@@ -1103,11 +1232,79 @@ exports.updateLandingPage = async (req, res, next) => {
     if (leadCaptureMethod !== undefined) landingPage.leadCaptureMethod = leadCaptureMethod;
     if (headline !== undefined) landingPage.headline = headline;
     if (subheadline !== undefined) landingPage.subheadline = subheadline;
+
+    // Legacy single fields (use first element from arrays for backward compatibility)
     if (assignedDesigner !== undefined) landingPage.assignedDesigner = assignedDesigner;
     if (assignedDeveloper !== undefined) landingPage.assignedDeveloper = assignedDeveloper;
+
+    // New array fields for multi-select
+    if (assignedDesigners !== undefined) landingPage.assignedDesigners = assignedDesigners;
+    if (assignedDevelopers !== undefined) landingPage.assignedDevelopers = assignedDevelopers;
+    if (assignedContentWriters !== undefined) landingPage.assignedContentWriters = assignedContentWriters;
+    if (assignedGraphicDesigners !== undefined) landingPage.assignedGraphicDesigners = assignedGraphicDesigners;
+    if (assignedVideoEditors !== undefined) landingPage.assignedVideoEditors = assignedVideoEditors;
+    if (assignedTesters !== undefined) landingPage.assignedTesters = assignedTesters;
+
     landingPage.updatedAt = new Date();
 
     await project.save();
+
+    // Update existing tasks for this landing page (name, hook, angle, platform, etc.)
+    try {
+      const existingTasks = await Task.find({
+        landingPageId: landingPageId,
+        projectId: id
+      });
+
+      if (existingTasks.length > 0) {
+        const lpName = name || landingPage.name || 'Landing Page';
+        const platformStr = platform || landingPage.platform || '';
+        const lpHook = hook !== undefined ? hook : landingPage.hook;
+        const lpAngle = angle !== undefined ? angle : landingPage.angle;
+        const lpHeadline = headline !== undefined ? headline : landingPage.headline;
+        const lpCta = cta !== undefined ? cta : landingPage.cta;
+        const lpType = funnelType || landingPage.funnelType || 'video_sales_letter';
+        const lpLeadCapture = landingPage.leadCapture || null;
+        const lpLeadCaptureMethod = landingPage.leadCaptureMethod || landingPage.leadCapture?.method || 'form';
+
+        for (const task of existingTasks) {
+          // Update task title if name changed
+          if (task.taskType === 'landing_page_design') {
+            task.taskTitle = `Design: ${lpName}`;
+          } else if (task.taskType === 'landing_page_development') {
+            task.taskTitle = `Develop: ${lpName}`;
+          }
+
+          // Update strategy context with correct field names
+          task.strategyContext = {
+            ...task.strategyContext,
+            businessName: project.businessName || project.customerName,
+            industry: project.industry || '',
+            platform: platformStr,
+            hook: lpHook || '',
+            creativeAngle: lpAngle || '',
+            headline: lpHeadline || '',
+            cta: lpCta || '',
+            // These are the fields displayed in the UI
+            funnelStage: lpType, // funnelStage is displayed as "Funnel Stage"
+            creativeType: task.taskType === 'landing_page_design' ? 'landing_page_design' : 'landing_page_development', // creativeType is displayed as "Creative Type"
+            landingPageType: lpType,
+            leadCapture: lpLeadCapture,
+            leadCaptureMethod: lpLeadCaptureMethod
+          };
+
+          // Update landing page type on task
+          task.landingPageType = lpType;
+
+          await task.save();
+        }
+
+        console.log(`Updated ${existingTasks.length} tasks for landing page ${landingPageId}`);
+      }
+    } catch (taskUpdateError) {
+      console.error('Error updating landing page tasks:', taskUpdateError);
+      // Don't fail the request if task update fails
+    }
 
     // Update existing tasks if team assignments changed
     if (teamAssignmentChanged) {
@@ -1193,6 +1390,26 @@ exports.updateLandingPage = async (req, res, next) => {
             }
           }
         }
+      }
+
+      // Update testerIds on all landing page tasks if assignedTesters changed
+      if (assignedTesters !== undefined && JSON.stringify(assignedTesters.map(String).sort()) !== JSON.stringify(oldTesterIds.sort())) {
+        console.log('Updating testerIds on landing page tasks. Old testers:', oldTesterIds, '-> New testers:', assignedTesters);
+
+        const newTesterIds = (assignedTesters || []).map(t => t.toString());
+
+        // Update all tasks for this landing page with new testers
+        const taskUpdateResult = await Task.updateMany(
+          {
+            projectId: id,
+            landingPageId: landingPageId,
+            status: { $in: ['todo', 'in_progress', 'design_pending', 'development_pending', 'design_submitted', 'development_submitted'] }
+          },
+          {
+            $set: { testerIds: newTesterIds }
+          }
+        );
+        console.log(`Updated ${taskUpdateResult.modifiedCount} landing page tasks with new testers`);
       }
     }
 
@@ -1318,11 +1535,28 @@ exports.completeLandingPageStage = async (req, res, next) => {
       null;
     const developerId = developerEntry?._id || developerEntry || null;
 
+    // Resolve testers (support multiple)
+    const projectTesters =
+      (project.assignedTeam?.testers?.length > 0)
+        ? project.assignedTeam.testers.map(t => t._id || t)
+        : project.assignedTeam?.tester
+          ? [project.assignedTeam.tester._id || project.assignedTeam.tester]
+          : [];
+
+    // Resolve performance marketer
+    const marketerEntry =
+      project.assignedTeam?.performanceMarketers?.[0] ||
+      project.assignedTeam?.performanceMarketer ||
+      null;
+    const marketerId = marketerEntry?._id || marketerEntry || null;
+
     console.log('=== completeLandingPageStage: team resolution ===');
     console.log('uiUxDesigners (array):', JSON.stringify(project.assignedTeam?.uiUxDesigners?.map(d => ({ id: d._id, name: d.name }))));
     console.log('uiUxDesigner (legacy):', JSON.stringify(project.assignedTeam?.uiUxDesigner));
     console.log('Resolved uiuxDesigners count:', uiuxDesigners.length);
     console.log('Resolved developerId:', developerId);
+    console.log('Resolved testers:', projectTesters);
+    console.log('Resolved marketerId:', marketerId);
 
     // Allow Performance Marketer to complete stage without requiring UI/UX Designer or Developer
     // Tasks will be created when those roles are assigned later
@@ -1385,7 +1619,7 @@ exports.completeLandingPageStage = async (req, res, next) => {
     ]);
 
     const tasksCreated = [];
-    const contextLink = `${process.env.CLIENT_URL}/projects/${id}/strategy-summary`;
+    const contextLink = buildUrl(`/projects/${id}/strategy-summary`);
 
     for (const landingPage of landingPages) {
       if (existingLandingPageIds.has(landingPage._id.toString())) {
@@ -1426,6 +1660,13 @@ exports.completeLandingPageStage = async (req, res, next) => {
       console.log(`Landing page assignedDesigner: ${landingPage.assignedDesigner}`);
       console.log(`Resolved designerIdToAssign: ${designerIdToAssign}`);
 
+      // Get landing-page-specific testers if set, otherwise use project-level testers
+      const landingPageTesters = (landingPage.assignedTesters && landingPage.assignedTesters.length > 0)
+        ? landingPage.assignedTesters.map(t => t._id || t)
+        : projectTesters;
+
+      console.log(`Landing page testers: ${landingPageTesters.join(', ')}`);
+
       if (designerIdToAssign) {
         const designTask = await Task.create({
           projectId: id,
@@ -1440,7 +1681,9 @@ exports.completeLandingPageStage = async (req, res, next) => {
           createdBy: userId,
           status: 'design_pending',
           strategyContext,
-          contextLink
+          contextLink,
+          testerIds: landingPageTesters,
+          marketerId: marketerId
         });
 
         tasksCreated.push(designTask);
@@ -1503,7 +1746,9 @@ exports.completeLandingPageStage = async (req, res, next) => {
         status: 'development_pending',
         description: 'This task will become active after the design is approved.',
         strategyContext,
-        contextLink
+        contextLink,
+        testerIds: landingPageTesters,
+        marketerId: marketerId
       });
 
       tasksCreated.push(devTask);

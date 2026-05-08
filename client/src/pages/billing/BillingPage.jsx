@@ -147,6 +147,19 @@ export default function BillingPage() {
   const isActive = isSubscriptionActive(subscription?.organization?.subscriptionStatus);
   const daysRemaining = getDaysRemaining(subscription?.organization?.currentPeriodEnd);
   const isCanceled = subscription?.organization?.canceledAt;
+
+  // Determine warning level based on days remaining
+  const getExpiryWarningLevel = () => {
+    if (!daysRemaining || daysRemaining > 14) return 'none';
+    if (daysRemaining <= 1) return 'critical';
+    if (daysRemaining <= 5) return 'warning';
+    if (daysRemaining <= 14) return 'notice';
+    return 'none';
+  };
+
+  const expiryWarningLevel = getExpiryWarningLevel();
+  const showExpiryWarning = expiryWarningLevel !== 'none' && isActive && !isCanceled;
+
 const sortedPlans = [...plans];
 
 // Find popular plan (assumes plan.isPopular === true)
@@ -166,6 +179,70 @@ if (popularIndex !== -1) {
           Manage your subscription, view usage, and access invoices
         </p>
       </div>
+
+      {/* Expiry Warning Banner */}
+      {showExpiryWarning && (
+        <div className={cn(
+          'mb-6 rounded-xl border p-4',
+          expiryWarningLevel === 'critical'
+            ? 'border-red-200 bg-red-50'
+            : expiryWarningLevel === 'warning'
+            ? 'border-orange-200 bg-orange-50'
+            : 'border-yellow-200 bg-yellow-50'
+        )}>
+          <div className="flex items-center gap-3">
+            <AlertTriangle className={cn(
+              'h-5 w-5',
+              expiryWarningLevel === 'critical'
+                ? 'text-red-500'
+                : expiryWarningLevel === 'warning'
+                ? 'text-orange-500'
+                : 'text-yellow-500'
+            )} />
+            <div className="flex-1">
+              <h3 className={cn(
+                'font-semibold',
+                expiryWarningLevel === 'critical'
+                  ? 'text-red-800'
+                  : expiryWarningLevel === 'warning'
+                  ? 'text-orange-800'
+                  : 'text-yellow-800'
+              )}>
+                {daysRemaining === 0
+                  ? 'Your subscription expires today!'
+                  : daysRemaining === 1
+                  ? 'Your subscription expires tomorrow!'
+                  : `${daysRemaining} days remaining in your subscription`}
+              </h3>
+              <p className={cn(
+                'text-sm mt-1',
+                expiryWarningLevel === 'critical'
+                  ? 'text-red-700'
+                  : expiryWarningLevel === 'warning'
+                  ? 'text-orange-700'
+                  : 'text-yellow-700'
+              )}>
+                {daysRemaining === 0
+                  ? 'Renew now to avoid service interruption.'
+                  : 'Renew now to ensure uninterrupted access to all features.'}
+              </p>
+            </div>
+            <button
+              onClick={() => navigate('/dashboard/billing/plans')}
+              className={cn(
+                'rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors',
+                expiryWarningLevel === 'critical'
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : expiryWarningLevel === 'warning'
+                  ? 'bg-orange-600 hover:bg-orange-700'
+                  : 'bg-yellow-600 hover:bg-yellow-700'
+              )}
+            >
+              Renew Now
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Current Plan Card */}
       <div className="mb-8 rounded-xl border border-gray-200 bg-white overflow-hidden">
@@ -197,6 +274,19 @@ if (popularIndex !== -1) {
                   )}>
                     {subscription?.organization?.subscriptionStatus || 'Inactive'}
                   </span>
+                  {isActive && daysRemaining !== null && !isCanceled && (
+                    <span className={cn(
+                      'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                      daysRemaining <= 5
+                        ? 'bg-red-100 text-red-700'
+                        : daysRemaining <= 14
+                        ? 'bg-yellow-100 text-yellow-700'
+                        : 'bg-green-100 text-green-700'
+                    )}>
+                      <Clock className="h-3 w-3 mr-1" />
+                      {daysRemaining} days left
+                    </span>
+                  )}
                 </div>
                 <p className="text-sm text-gray-500">
                   {isCanceled ? (
@@ -326,34 +416,32 @@ if (popularIndex !== -1) {
               )} />
             </button>
             <span className={cn(
-              'rounded-full px-3 py-1 text-sm font-medium transition-all',
+              'rounded-full pl-3 pr-5 py-1  text-sm font-medium transition-all',
               billingPeriod === 'yearly'
                 ? 'bg-primary-100 text-primary-700'
                 : 'bg-gray-100 text-gray-600'
             )}>
               Yearly
               {billingPeriod === 'yearly' && (
-                <span className="ml-1 text-green-600">(Save 20%)</span>
+                <span className=" text-green-600">(Save 20%)</span>
               )}
             </span>
           </div>
         </div>
         <div className="p-6">
-  <div className="flex justify-center">
-     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 justify-items-center">
-      {sortedPlans.map((plan) => (
-        <PlanCard
-          key={plan._id || plan.id}
-          plan={plan}
-          currentPlan={plan.slug === subscription?.organization?.plan}
-          billingPeriod={billingPeriod}
-          onSelect={handleSelectPlan}
-          highlightColor={plan.highlightColor}
-          isCenter={plan.isPopular} // 👈 IMPORTANT
-        />
-      ))}
-    </div>
-    </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {sortedPlans.map((plan) => (
+              <PlanCard
+                key={plan._id || plan.id}
+                plan={plan}
+                currentPlan={plan.slug === subscription?.organization?.plan}
+                billingPeriod={billingPeriod}
+                onSelect={handleSelectPlan}
+                highlightColor={plan.highlightColor}
+                isCenter={plan.isPopular}
+              />
+            ))}
+          </div>
         </div>
       </div>
 

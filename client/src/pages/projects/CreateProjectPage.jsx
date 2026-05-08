@@ -1115,6 +1115,8 @@ export default function CreateProjectPage() {
                   label="Start Date"
                   type="date"
                   required
+                  min={new Date().toISOString().split('T')[0]}
+                  max="2099-12-31"
                   error={errors.timelineStartDate?.message}
                   {...register('timelineStartDate')}
                 />
@@ -1122,7 +1124,8 @@ export default function CreateProjectPage() {
                   label="End Date"
                   type="date"
                   required
-                  min={minEndDate}
+                  min={minEndDate || new Date().toISOString().split('T')[0]}
+                  max="2099-12-31"
                   error={errors.timelineEndDate?.message}
                   {...register('timelineEndDate')}
                 />

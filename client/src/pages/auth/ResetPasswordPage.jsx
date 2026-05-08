@@ -173,7 +173,7 @@ export default function ResetPasswordPage() {
                 />
                 <button
                   type="button"
-                  className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-[34px] text-gray-400 hover:text-gray-600"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
@@ -194,7 +194,7 @@ export default function ResetPasswordPage() {
                 />
                 <button
                   type="button"
-                  className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-[34px] text-gray-400 hover:text-gray-600"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 >
                   {showConfirmPassword ? (

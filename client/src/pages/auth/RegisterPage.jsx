@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { Button, Input, Card, CardBody, Spinner } from '@/components/ui';
-import { Check, ArrowLeft } from 'lucide-react';
+import { Check, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import growthValleyLogo from '@/assets/growth-valley-logo.webp';
 
 const registerSchema = z.object({
@@ -21,6 +21,8 @@ const registerSchema = z.object({
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [plans, setPlans] = useState([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -217,21 +219,47 @@ export default function RegisterPage() {
                     {...register('email')}
                   />
 
-                  <Input
-                    label="Password"
-                    type="password"
-                    placeholder="••••••••"
-                    error={errors.password?.message}
-                    {...register('password')}
-                  />
+                  <div className="relative">
+                    <Input
+                      label="Password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      error={errors.password?.message}
+                      {...register('password')}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-[34px] text-gray-400 hover:text-gray-600"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-5 h-5" />
+                      ) : (
+                        <Eye className="w-5 h-5" />
+                      )}
+                    </button>
+                  </div>
 
-                  <Input
-                    label="Confirm Password"
-                    type="password"
-                    placeholder="••••••••"
-                    error={errors.confirmPassword?.message}
-                    {...register('confirmPassword')}
-                  />
+                  <div className="relative">
+                    <Input
+                      label="Confirm Password"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      error={errors.confirmPassword?.message}
+                      {...register('confirmPassword')}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-[34px] text-gray-400 hover:text-gray-600"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="w-5 h-5" />
+                      ) : (
+                        <Eye className="w-5 h-5" />
+                      )}
+                    </button>
+                  </div>
 
                   <Button
                     type="submit"
@@ -285,24 +313,48 @@ export default function RegisterPage() {
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Choose Your Plan</h2>
 
                 {/* Billing Toggle */}
-                <div className="flex items-center justify-center mb-6">
-                  <span className={`text-sm font-medium ${billingCycle === 'monthly' ? 'text-gray-900' : 'text-gray-500'}`}>
-                    Monthly
-                  </span>
-                  <button
-                    onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'yearly' : 'monthly')}
-                    className="mx-4 relative w-14 h-7 bg-gray-300 rounded-full transition-colors hover:bg-gray-400"
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${
-                        billingCycle === 'yearly' ? 'translate-x-7' : ''
-                      }`}
-                    />
-                  </button>
-                  <span className={`text-sm font-medium ${billingCycle === 'yearly' ? 'text-gray-900' : 'text-gray-500'}`}>
-                    Yearly <span className="text-green-600 font-semibold">Save 17%</span>
-                  </span>
-                </div>
+           <div className="flex items-center justify-center mb-6">
+  <span
+    style={{ fontSize: 14, fontWeight: 500, color: billingCycle === 'monthly' ? '#111' : '#999' }}
+  >
+    Monthly
+  </span>
+
+  <div
+    onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'yearly' : 'monthly')}
+    style={{
+      margin: '0 16px',
+      width: 56,
+      height: 28,
+      borderRadius: 999,
+      backgroundColor: billingCycle === 'yearly' ? '#2563eb' : '#d1d5db',
+      position: 'relative',
+      cursor: 'pointer',
+      transition: 'background-color 0.3s ease',
+    }}
+  >
+    <div
+      style={{
+        position: 'absolute',
+        top: 3,
+        left: billingCycle === 'yearly' ? 29 : 3,
+        width: 22,
+        height: 22,
+        borderRadius: '50%',
+        backgroundColor: '#ffffff',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+        transition: 'left 0.3s ease',
+      }}
+    />
+  </div>
+
+  <span
+    style={{ fontSize: 14, fontWeight: 500, color: billingCycle === 'yearly' ? '#111' : '#999' }}
+  >
+    Yearly{' '}
+    <span style={{ color: '#16a34a', fontWeight: 600 }}>Save 17%</span>
+  </span>
+</div>
 
                 {/* Plans Grid */}
                 <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -376,21 +428,47 @@ export default function RegisterPage() {
                       {...register('email')}
                     />
 
-                    <Input
-                      label="Password"
-                      type="password"
-                      placeholder="••••••••"
-                      error={errors.password?.message}
-                      {...register('password')}
-                    />
+                    <div className="relative">
+                      <Input
+                        label="Password"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        error={errors.password?.message}
+                        {...register('password')}
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="w-5 h-5" />
+                        ) : (
+                          <Eye className="w-5 h-5" />
+                        )}
+                      </button>
+                    </div>
 
-                    <Input
-                      label="Confirm Password"
-                      type="password"
-                      placeholder="••••••••"
-                      error={errors.confirmPassword?.message}
-                      {...register('confirmPassword')}
-                    />
+                    <div className="relative">
+                      <Input
+                        label="Confirm Password"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        error={errors.confirmPassword?.message}
+                        {...register('confirmPassword')}
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="w-5 h-5" />
+                        ) : (
+                          <Eye className="w-5 h-5" />
+                        )}
+                      </button>
+                    </div>
 
                     <Button
                       type="submit"

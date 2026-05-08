@@ -7,6 +7,7 @@ import { Card, CardBody, CardHeader, Button, Badge, ProgressBar, Spinner } from 
 import { StageProgressTracker } from '@/components/workflow';
 import { ProjectSummary, TeamMemberProjectView, TesterProjectView } from '@/components/project';
 import LandingPagesSection from '@/components/landing-pages/LandingPagesSection';
+import ProjectTaskProgress from '@/components/projects/ProjectTaskProgress';
 import {
   ArrowLeft,
   Edit,
@@ -359,9 +360,9 @@ export default function ProjectDetailPage() {
 
       {/* Progress Overview */}
       <Card>
-        <CardBody className="p-6">
+        <CardBody className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Project Progress</h2>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Project Overview</h2>
             {/* <span className="text-2xl font-bold text-primary-600">
               {project.overallProgress}%
             </span> */}
@@ -371,7 +372,7 @@ export default function ProjectDetailPage() {
             color={project.overallProgress >= 100 ? 'success' : 'primary'}
             size="lg"
           />
-          <div className="mt-6">
+          <div className="mt-4 sm:mt-6">
             <StageProgressTracker stages={project.stages} currentStage={project.currentStage} />
           </div>
         </CardBody>
@@ -469,18 +470,22 @@ export default function ProjectDetailPage() {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8">
-                  <Users className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                  <p className="text-gray-500">No team members assigned yet</p>
-                  <Button
-                    variant="secondary"
-                    className="mt-4"
-                    onClick={() => navigate(`/dashboard/projects/${id}/assign-team`)}
-                  >
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Assign Team
-                  </Button>
-                </div>
+               <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
+  <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-3">
+    <Users className="w-8 h-8 text-gray-300" />
+  </div>
+  <p className="text-sm text-gray-500 max-w-[200px]">
+    No team members assigned yet
+  </p>
+  <Button
+    variant="secondary"
+    className="mt-4 w-full sm:w-auto"
+    onClick={() => navigate(`/dashboard/projects/${id}/assign-team`)}
+  >
+    <UserPlus className="w-2 h-4 mr-2" />
+    Assign Team
+  </Button>
+</div>
               );
             })()}
           </CardBody>
@@ -654,6 +659,9 @@ export default function ProjectDetailPage() {
           </div>
         </>
       )}
+
+      {/* Task Progress & Workflow Section - Visible to all roles */}
+      <ProjectTaskProgress projectId={id} projectName={project?.projectName || project?.businessName} />
 
       {/* Admin Message */}
       {isAdmin && (

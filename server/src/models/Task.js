@@ -83,6 +83,10 @@ const taskSchema = new mongoose.Schema({
     type: String,
     description: 'Reference to ad type from creative strategy (awareness, consideration, etc.)'
   },
+  creativePlanItemId: {
+    type: mongoose.Schema.Types.ObjectId,
+    description: 'Reference to the specific creativePlan item this task belongs to (for tracking updates)'
+  },
 
   // Task identification
   taskTitle: {
@@ -126,11 +130,17 @@ const taskSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  // Tester assigned to review this task (from project team)
+  // Testers assigned to review this task (from project team) - supports multiple testers
+  testerIds: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    description: 'Testers assigned to review this task'
+  }],
+  // Legacy field for backward compatibility
   testerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    description: 'The tester assigned to review this task'
+    description: 'Legacy: Single tester assigned to review this task (use testerIds for new tasks)'
   },
   // Performance Marketer assigned for final approval
   marketerId: {
@@ -253,7 +263,12 @@ const taskSchema = new mongoose.Schema({
 
     // Creative plan fields
     creativeType: { type: String },
-    creativeCategory: { type: String }
+    creativeCategory: { type: String },
+
+    // Landing page fields
+    landingPageType: { type: String, description: 'Type of landing page (video_sales_letter, lead_generation, etc.)' },
+    leadCapture: { type: Object, description: 'Lead capture configuration object' },
+    leadCaptureMethod: { type: String, description: 'Lead capture method (form, calendly, whatsapp, free_audit)' }
   },
 
   // Strategy Context Links (for team members)
@@ -303,6 +318,13 @@ const taskSchema = new mongoose.Schema({
       body: { fontFamily: { type: String } }
     },
     selectedLogo: { type: String, enum: ['brand', 'custom'], default: 'brand' },
+    // Brand manual reference for designer's record
+    brandManualReference: {
+      fileName: { type: String },
+      filePath: { type: String },
+      acknowledgedAt: { type: Date },
+      acknowledged: { type: Boolean, default: false }
+    },
     updatedAt: { type: Date },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   },
@@ -358,6 +380,34 @@ const taskSchema = new mongoose.Schema({
     description: 'Notes from UI/UX designer to developer'
   },
 
+  // Designer's AI Prompt - copied from design task to development task
+  designerPrompt: {
+    type: String,
+    description: 'AI prompt/brief used by designer for the design - copied to development task for reference'
+  },
+
+  // Designer's brand overrides - copied from design task to development task
+  designerBrandOverrides: {
+    colors: {
+      primary: { hex: { type: String }, name: { type: String } },
+      secondary: { hex: { type: String }, name: { type: String } },
+      tertiary: { hex: { type: String }, name: { type: String } }
+    },
+    typography: {
+      title: { fontFamily: { type: String } },
+      subtitle: { fontFamily: { type: String } },
+      body: { fontFamily: { type: String } }
+    },
+    selectedLogo: { type: String },
+    // Brand manual reference for developer's reference
+    brandManualReference: {
+      fileName: { type: String },
+      filePath: { type: String },
+      acknowledgedAt: { type: Date },
+      acknowledged: { type: Boolean, default: false }
+    }
+  },
+
   // Landing Page Development submission fields (Developer)
   implementationUrl: {
     type: String,
@@ -403,6 +453,68 @@ const taskSchema = new mongoose.Schema({
     note: { type: String }
   }],
 
+  // Progress History - tracks task progress through workflow stages
+  progressHistory: [{
+    // Which stage/phase the task is in
+    stage: {
+      type: String,
+      enum: [
+        'created',           // Task just created
+        'assigned',          // Assigned to a team member
+        'content_pending',   // Content creation pending
+        'content_submitted', // Content submitted for review
+        'content_reviewed',  // Content reviewed by tester
+        'content_approved',  // Content approved (ready for design)
+        'content_rejected',  // Content rejected
+        'design_pending',    // Design work pending
+        'design_submitted',  // Design submitted for review
+        'design_reviewed',   // Design reviewed by tester
+        'design_approved',   // Design approved by tester (pending marketer)
+        'design_rejected',   // Design rejected
+        'development_pending', // Development pending
+        'development_submitted', // Development submitted
+        'development_reviewed', // Development reviewed by tester
+        'development_approved', // Development approved by tester
+        'marketer_review',   // Pending marketer final approval
+        'final_approved',    // Task completed
+        'rejected'           // Task rejected and needs revision
+      ],
+      required: true
+    },
+    // Action that occurred
+    action: {
+      type: String,
+      enum: ['created', 'assigned', 'submitted', 'reviewed', 'approved', 'rejected', 'resubmitted', 'completed'],
+      required: true
+    },
+    // Who performed the action
+    actor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    // Role of the actor
+    actorRole: {
+      type: String,
+      enum: ['admin', 'performance_marketer', 'content_creator', 'content_writer', 'graphic_designer', 'video_editor', 'ui_ux_designer', 'developer', 'tester'],
+      required: true
+    },
+    // When this occurred
+    timestamp: {
+      type: Date,
+      default: Date.now
+    },
+    // Optional notes/comments
+    notes: {
+      type: String
+    },
+    // Duration from previous stage (calculated)
+    durationFromPrevious: {
+      type: Number, // Duration in milliseconds
+      default: null
+    }
+  }],
+
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -426,6 +538,14 @@ taskSchema.index({ assignedTo: 1, status: 1 });
 taskSchema.index({ assignedRole: 1, status: 1 });
 taskSchema.index({ taskType: 1, status: 1 });
 taskSchema.index({ landingPageId: 1 });
+taskSchema.index({ creativePlanItemId: 1 }); // Index for matching tasks to creative plan items
+
+// Unique compound index to prevent duplicate tasks for the same creative plan item
+// This prevents the same creative from having multiple content or design tasks
+taskSchema.index(
+  { projectId: 1, creativePlanItemId: 1, taskType: 1 },
+  { unique: true, partialFilterExpression: { creativePlanItemId: { $exists: true, $ne: null } } }
+);
 
 // Static method to get role for task type
 taskSchema.statics.getRoleForTaskType = function(taskType) {
@@ -458,8 +578,9 @@ taskSchema.methods.canBeReviewedByTester = function() {
 // Method to check if task can be approved by marketer
 taskSchema.methods.canBeApprovedByMarketer = function() {
   // Marketer approves after tester approval - final step before completion
-  // Note: content_final_approved goes directly to design, not marketer
+  // Content goes through marketer approval before being handed to design
   const marketerApprovableStatuses = [
+    'content_approved',      // Content approved by tester, awaiting marketer
     'design_approved',      // Design approved by tester, awaiting marketer (for creative tasks)
     'development_approved', // Development approved by tester, awaiting marketer (for landing pages)
     'approved_by_tester'    // Legacy status for backward compatibility
@@ -469,15 +590,17 @@ taskSchema.methods.canBeApprovedByMarketer = function() {
 
 // Method to get next status after approval
 taskSchema.methods.getNextStatus = function(currentStatus, action, taskType) {
-  // Content creation workflow - NEW FLOW: Tester approves content → Design starts (skip marketer)
+  // Content creation workflow - UPDATED FLOW: Tester approves → Marketer approves → Design starts
   if (currentStatus === 'content_pending' && action === 'submit') return 'content_submitted';
-  if (currentStatus === 'content_submitted' && action === 'approve_tester') return 'content_final_approved'; // Direct to design, skip marketer
+  if (currentStatus === 'content_submitted' && action === 'approve_tester') return 'content_approved'; // Goes to marketer
   if (currentStatus === 'content_submitted' && action === 'reject') return 'content_rejected';
   if (currentStatus === 'content_rejected' && action === 'resubmit') return 'content_submitted';
+  if (currentStatus === 'content_approved' && action === 'approve_marketer') return 'content_final_approved'; // Marketer approves
+  if (currentStatus === 'content_approved' && action === 'reject') return 'content_rejected';
   if (currentStatus === 'content_final_approved' && action === 'start_design') return 'design_pending';
 
   // Design workflow (for graphic design/video tasks)
-  // Marketer only reviews final design, not content
+  // Marketer reviews final design
   if (currentStatus === 'design_pending' && action === 'submit') return 'design_submitted';
   if (currentStatus === 'design_submitted' && action === 'approve_tester') return 'design_approved';
   if (currentStatus === 'design_submitted' && action === 'reject') return 'design_rejected';
@@ -527,6 +650,109 @@ taskSchema.methods.addRevision = function(userId, note, oldStatus, newStatus) {
   this.revisionCount = this.revisionHistory.length;
   return this;
 };
+
+// Add progress history entry
+// Maps status to progress stage
+const STATUS_TO_STAGE = {
+  'todo': 'created',
+  'in_progress': 'assigned',
+  'content_pending': 'content_pending',
+  'content_submitted': 'content_submitted',
+  'content_final_approved': 'content_approved',
+  'content_rejected': 'content_rejected',
+  'design_pending': 'design_pending',
+  'design_submitted': 'design_submitted',
+  'design_approved': 'design_approved',
+  'design_rejected': 'design_rejected',
+  'development_pending': 'development_pending',
+  'development_submitted': 'development_submitted',
+  'development_approved': 'development_approved',
+  'final_approved': 'final_approved',
+  'rejected': 'rejected',
+  'approved_by_tester': 'marketer_review',
+  'submitted': 'design_submitted'
+};
+
+// Map status to action
+const STATUS_TO_ACTION = {
+  'todo': 'created',
+  'in_progress': 'assigned',
+  'content_pending': 'assigned',
+  'content_submitted': 'submitted',
+  'content_final_approved': 'approved',
+  'content_rejected': 'rejected',
+  'design_pending': 'assigned',
+  'design_submitted': 'submitted',
+  'design_approved': 'approved',
+  'design_rejected': 'rejected',
+  'development_pending': 'assigned',
+  'development_submitted': 'submitted',
+  'development_approved': 'approved',
+  'final_approved': 'completed',
+  'rejected': 'rejected',
+  'approved_by_tester': 'approved',
+  'submitted': 'submitted'
+};
+
+taskSchema.methods.addProgressEntry = function(userId, userRole, action, notes = null) {
+  const stage = STATUS_TO_STAGE[this.status] || this.status;
+
+  // Calculate duration from previous entry
+  let durationFromPrevious = null;
+  if (this.progressHistory.length > 0) {
+    const lastEntry = this.progressHistory[this.progressHistory.length - 1];
+    durationFromPrevious = new Date() - lastEntry.timestamp;
+  }
+
+  this.progressHistory.push({
+    stage: stage,
+    action: action,
+    actor: userId,
+    actorRole: userRole,
+    timestamp: new Date(),
+    notes: notes,
+    durationFromPrevious: durationFromPrevious
+  });
+
+  return this;
+};
+
+// Get formatted progress timeline for display
+taskSchema.methods.getProgressTimeline = function() {
+  return this.progressHistory.map((entry, index) => ({
+    stage: entry.stage,
+    action: entry.action,
+    actor: entry.actor,
+    actorRole: entry.actorRole,
+    timestamp: entry.timestamp,
+    notes: entry.notes,
+    durationFromPrevious: entry.durationFromPrevious,
+    // Calculate human-readable duration
+    durationFormatted: entry.durationFromPrevious ? formatDuration(entry.durationFromPrevious) : null
+  }));
+};
+
+// Helper to format duration in human-readable format
+function formatDuration(ms) {
+  if (!ms) return null;
+
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) {
+    const remainingHours = hours % 24;
+    return `${days}d ${remainingHours}h`;
+  } else if (hours > 0) {
+    const remainingMinutes = minutes % 60;
+    return `${hours}h ${remainingMinutes}m`;
+  } else if (minutes > 0) {
+    return `${minutes}m`;
+  } else {
+    return `${seconds}s`;
+  }
+}
 
 // Pre-validate hook to fix corrupted framework fields (handle legacy array data)
 // This runs BEFORE validation so we can fix data before Mongoose validates it

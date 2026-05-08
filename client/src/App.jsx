@@ -557,7 +557,7 @@ export default function App() {
     >
       <AuthProvider>
         <AppRoutes />
-        <Toaster position="top-right" richColors />
+        <Toaster position="top-right" richColors toastOptions={{ duration: 5000 }} />
       </AuthProvider>
     </BrowserRouter>
   );

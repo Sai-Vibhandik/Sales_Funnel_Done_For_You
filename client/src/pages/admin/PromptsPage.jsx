@@ -1503,12 +1503,12 @@ export default function PromptsPage() {
           <div className="p-6 max-h-[90vh] overflow-y-auto w-full max-w-3xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">{viewPrompt.title}</h2>
-              <button
+              {/* <button
                 onClick={() => setViewPrompt(null)}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </button> */}
             </div>
 
             <div className="space-y-4">

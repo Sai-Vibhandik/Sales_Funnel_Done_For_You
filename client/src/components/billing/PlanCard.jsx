@@ -14,7 +14,8 @@ export function PlanCard({
   onSelect,
   billingPeriod = 'monthly',
   isLoading = false,
-  highlightColor
+  highlightColor,
+  isCenter = false
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -31,11 +32,11 @@ export function PlanCard({
   return (
     <div
       className={cn(
-        'relative rounded-2xl border-2 p-6 transition-all duration-300',
+        'relative flex flex-col w-full min-h-[480px] rounded-2xl border-2 p-5 sm:p-6 transition-all duration-300',
         currentPlan
           ? 'border-primary-500 bg-primary-50/50 shadow-lg'
           : isPopular
-          ? 'border-primary-500 bg-white shadow-xl scale-105'
+          ? 'border-primary-500 bg-white shadow-lg'
           : 'border-gray-200 bg-white hover:border-primary-300 hover:shadow-lg'
       )}
       style={highlightColor && isPopular ? { borderColor: highlightColor } : undefined}
@@ -45,10 +46,10 @@ export function PlanCard({
       {/* Popular Badge */}
       {isPopular && (
         <div
-          className="absolute -top-4 left-1/2 -translate-x-1/2"
+          className="absolute -top-4 left-1/2 -translate-x-1/2 z-10"
           style={{ color: highlightColor || '#6366f1' }}
         >
-          <div className="flex items-center gap-1 rounded-full bg-primary-500 px-4 py-1 text-sm font-semibold text-white">
+          <div className="flex items-center gap-1 whitespace-nowrap rounded-full bg-primary-500 px-4 py-1 text-sm font-semibold text-white">
             <Sparkles className="h-4 w-4" />
             {plan.badge?.text || 'Most Popular'}
           </div>
@@ -57,7 +58,7 @@ export function PlanCard({
 
       {/* Current Plan Badge */}
       {currentPlan && (
-        <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+        <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
           <div className="rounded-full bg-green-500 px-4 py-1 text-sm font-semibold text-white">
             Current Plan
           </div>
@@ -65,15 +66,15 @@ export function PlanCard({
       )}
 
       {/* Plan Header */}
-      <div className="text-center">
+      <div className="text-center flex-shrink-0">
         <h3 className="text-xl font-bold text-gray-900">{plan.name}</h3>
         {plan.description && (
-          <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
+          <p className="mt-2 text-sm text-gray-500 min-h-[40px]">{plan.description}</p>
         )}
       </div>
 
       {/* Price */}
-      <div className="mt-6 text-center">
+      <div className="mt-6 text-center flex-shrink-0">
         <div className="flex items-baseline justify-center">
           <span className="text-4xl font-bold text-gray-900">
             {formatCurrency(price, plan.currency?.code || 'USD')}
@@ -104,12 +105,12 @@ export function PlanCard({
       </div>
 
       {/* Features List */}
-      <ul className="mt-6 space-y-3">
+      <ul className="mt-6 space-y-3 flex-grow">
         {features.map((feature, index) => (
           <li key={index} className="flex items-start gap-3">
             <Check
               className={cn(
-                'h-5 w-5 flex-shrink-0',
+                'h-5 w-5 flex-shrink-0 mt-0.5',
                 feature.highlighted ? 'text-primary-500' : 'text-gray-400'
               )}
             />
@@ -126,7 +127,7 @@ export function PlanCard({
       </ul>
 
       {/* CTA Button */}
-      <div className="mt-8">
+      <div className="mt-auto pt-6">
         <button
           onClick={() => !currentPlan && onSelect?.(plan)}
           disabled={currentPlan || isLoading}
@@ -153,14 +154,14 @@ export function PlanCard({
             'Select Plan'
           )}
         </button>
-      </div>
 
-      {/* Trial info */}
-      {plan.trialDays > 0 && !currentPlan && (
-        <p className="mt-3 text-center text-sm text-gray-500">
-          {plan.trialDays} day free trial included
-        </p>
-      )}
+        {/* Trial info */}
+        {plan.trialDays > 0 && !currentPlan && (
+          <p className="mt-3 text-center text-sm text-gray-500">
+            {plan.trialDays} day free trial included
+          </p>
+        )}
+      </div>
     </div>
   );
 }

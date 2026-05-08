@@ -25,6 +25,10 @@ if (!fs.existsSync(taskDeliverablesDir)) {
 const connectDB = require("./config/database");
 connectDB();
 
+// Billing Cron Jobs
+const { initBillingCronJobs } = require("./services/billingCronService");
+initBillingCronJobs();
+
 // Routes
 const authRoutes = require("./routes/auth");
 const organizationRoutes = require("./routes/organizations");
@@ -45,6 +49,7 @@ const platformAdminRoutes = require("./routes/platformAdmin");
 const billingRoutes = require("./routes/billing");
 const webhookRoutes = require("./routes/webhooks");
 const rejectionRoutes = require("./routes/rejections");
+const searchRoutes = require("./routes/search");
 
 // Socket.io
 const { setIO } = require("./controllers/projectController");
@@ -65,8 +70,8 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // Request logging
 app.use(morgan("dev"));
 
-// Static files
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// Static files - serve from server/uploads directory
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // Health check
 app.get("/api/health", (req, res) => {
@@ -107,6 +112,10 @@ app.use("/api/billing", billingRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/rejections", protect, setTenantContext, requireOrganization, rejectionRoutes);
+app.use("/api/search", protect, setTenantContext, requireOrganization, searchRoutes);
+// Brand settings public route (for viewing brand manuals) - must be before protected routes
+const brandSettingsController = require("./controllers/brandSettingsController");
+app.get("/api/brand-settings/:projectId/manual/file", brandSettingsController.serveBrandManual);
 app.use("/api/brand-settings", protect, setTenantContext, requireOrganization, require("./routes/brandSettings"));
 
 // 404 handler

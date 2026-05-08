@@ -4,7 +4,7 @@ import { Card, CardBody, CardHeader, Button, Textarea, Badge } from '@/component
 import {
   Image, Video, Layout, Plus, Trash2, ChevronDown, ChevronUp, CheckCircle, FileImage,
   Target, Type, Monitor, Users, FileText, Megaphone, TrendingUp, Zap, Eye, MousePointer,
-  UserPlus, Send, DollarSign, Sparkles
+  UserPlus, Send, DollarSign, Sparkles, CheckSquare, AlertTriangle, Check
 } from 'lucide-react';
 import {
   CREATIVE_TYPES,
@@ -14,7 +14,7 @@ import {
   getSubTypesForCreativeType,
   getRoleLabel
 } from '@/constants/creativeTypes';
-import { frameworkCategoryService } from '@/services/api';
+import { frameworkCategoryService, creativeService } from '@/services/api';
 
 // Icon mapping for creative types
 const CREATIVE_TYPE_ICONS = {
@@ -79,7 +79,8 @@ const createEmptyCreative = () => ({
   screenSizes: [],
   assignedRole: '',
   assignedTeamMembers: [],
-  contentWriter: '',
+  contentWriters: [],
+  assignedTesters: [],
   adIntent: '',
   aiFramework: '',
   aiSubCategory: '',
@@ -111,7 +112,8 @@ const FRAMEWORK_OPTIONS = [
 const ROLE_TO_TEAM_FIELD = {
   'content_writer': { arrayField: 'contentWriters', legacyField: 'contentWriter' },
   'graphic_designer': { arrayField: 'graphicDesigners', legacyField: 'graphicDesigner' },
-  'video_editor': { arrayField: 'videoEditors', legacyField: 'videoEditor' }
+  'video_editor': { arrayField: 'videoEditors', legacyField: 'videoEditor' },
+  'tester': { arrayField: 'testers', legacyField: 'tester' }
 };
 
 // LocalStorage key for auto-saving creative strategy data
@@ -126,12 +128,17 @@ export default function CreativePlanner({
   readOnly = false
 }) {
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [projectAssignedTeam, setProjectAssignedTeam] = useState({});
   const [creativePlan, setCreativePlan] = useState([]);
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [expandedCards, setExpandedCards] = useState({});
   const [allSubCategories, setAllSubCategories] = useState([]);
   const [lastAutoSaved, setLastAutoSaved] = useState(null);
+
+  // ─── FIX: Use ref to track saving state for immediate synchronous check
+  // This prevents multiple clicks before React state updates
+  const isSavingRef = useRef(false);
 
   // ─── FIX: Track the "last saved snapshot" so we can diff on save
   // and know which assignments are NEW (need task creation) vs unchanged.
@@ -171,7 +178,8 @@ export default function CreativePlanner({
               _id: r._id,
               assignedTeamMembers: [...(r.assignedTeamMembers || [])],
               contentWriter: r.contentWriter || '',
-              assignedRole: r.assignedRole || ''
+              assignedRole: r.assignedRole || '',
+              assignedTesters: [...(r.assignedTesters || [])]
             }));
           }
         }
@@ -253,14 +261,35 @@ export default function CreativePlanner({
             teamMembers = teamMembers.map(m => typeof m === 'string' ? m : m._id?.toString?.() || String(m));
           }
 
-          // contentWriter can be either ObjectId string or populated user object
-          let contentWriterId = item.contentWriter || '';
-          if (contentWriterId && typeof contentWriterId === 'object') {
-            // Populated object - extract _id
-            contentWriterId = contentWriterId._id?.toString?.() || contentWriterId._id || String(contentWriterId);
-          } else if (contentWriterId) {
-            // Already a string
-            contentWriterId = contentWriterId.toString();
+          // contentWriters can be either ObjectId strings or populated user objects (array field)
+          let contentWritersIds = item.contentWriters || [];
+          if (contentWritersIds.length > 0 && typeof contentWritersIds[0] === 'object') {
+            // Populated objects - extract _id from each
+            contentWritersIds = contentWritersIds.map(w => w._id?.toString?.() || w._id || String(w));
+          } else {
+            // Already strings - ensure they're strings
+            contentWritersIds = contentWritersIds.map(w => typeof w === 'string' ? w : w._id?.toString?.() || String(w));
+          }
+
+          // Fallback: Legacy contentWriter (single) field - convert to array
+          if (contentWritersIds.length === 0 && item.contentWriter) {
+            let legacyWriterId = item.contentWriter;
+            if (typeof legacyWriterId === 'object') {
+              legacyWriterId = legacyWriterId._id?.toString?.() || legacyWriterId._id || String(legacyWriterId);
+            } else {
+              legacyWriterId = legacyWriterId.toString();
+            }
+            contentWritersIds = [legacyWriterId];
+          }
+
+          // assignedTesters can be either ObjectId strings or populated user objects
+          let assignedTestersIds = item.assignedTesters || [];
+          if (assignedTestersIds.length > 0 && typeof assignedTestersIds[0] === 'object') {
+            // Populated objects - extract _id from each
+            assignedTestersIds = assignedTestersIds.map(t => t._id?.toString?.() || t._id || String(t));
+          } else {
+            // Already strings - ensure they're strings
+            assignedTestersIds = assignedTestersIds.map(t => typeof t === 'string' ? t : t._id?.toString?.() || String(t));
           }
 
           return {
@@ -274,7 +303,8 @@ export default function CreativePlanner({
             screenSizes: item.screenSizes || [],
             assignedRole: item.assignedRole || '',
             assignedTeamMembers: teamMembers,
-            contentWriter: contentWriterId,
+            contentWriters: contentWritersIds,
+            assignedTesters: assignedTestersIds,
             adIntent: item.adIntent || '',
             aiFramework: item.aiFramework || item.framework || '',
             aiSubCategory: item.aiSubCategory || item.subCategory || '',
@@ -288,8 +318,9 @@ export default function CreativePlanner({
         lastSavedPlanRef.current = migratedPlan.map(r => ({
           _id: r._id,
           assignedTeamMembers: [...(r.assignedTeamMembers || [])],
-          contentWriter: r.contentWriter || '',
-          assignedRole: r.assignedRole || ''
+          contentWriters: [...(r.contentWriters || [])],
+          assignedRole: r.assignedRole || '',
+          assignedTesters: [...(r.assignedTesters || [])]
         }));
 
         const expanded = {};
@@ -322,13 +353,46 @@ export default function CreativePlanner({
   };
 
   // Remove creative row
-  const removeCreativeRow = (rowId) => {
-    setCreativePlan(prev => prev.filter(row => row._id !== rowId));
-    setExpandedCards(prev => {
-      const newExpanded = { ...prev };
-      delete newExpanded[rowId];
-      return newExpanded;
-    });
+  const removeCreativeRow = async (rowId) => {
+    // Check if this is an existing creative (has a real MongoDB ID, not a temp ID)
+    const isExistingCreative = !isTemporaryId(rowId);
+
+    if (isExistingCreative) {
+      // For existing creatives, call the backend to delete and remove associated tasks
+      try {
+        setDeleting(true);
+        const response = await creativeService.deleteCreativePlanItem(projectId, rowId);
+        const { deletedItem, deletedTasksCount } = response.data || {};
+
+        // Remove from local state
+        setCreativePlan(prev => prev.filter(row => row._id !== rowId));
+        setExpandedCards(prev => {
+          const newExpanded = { ...prev };
+          delete newExpanded[rowId];
+          return newExpanded;
+        });
+
+        // Show success message with task deletion info
+        if (deletedTasksCount > 0) {
+          toast.success(`Creative "${deletedItem?.name || 'Unnamed'}" deleted. ${deletedTasksCount} associated task(s) removed.`);
+        } else {
+          toast.success(`Creative "${deletedItem?.name || 'Unnamed'}" deleted successfully.`);
+        }
+      } catch (error) {
+        console.error('Error deleting creative:', error);
+        toast.error(error?.response?.data?.message || 'Failed to delete creative');
+      } finally {
+        setDeleting(false);
+      }
+    } else {
+      // For new creatives (temp ID), just remove from local state
+      setCreativePlan(prev => prev.filter(row => row._id !== rowId));
+      setExpandedCards(prev => {
+        const newExpanded = { ...prev };
+        delete newExpanded[rowId];
+        return newExpanded;
+      });
+    }
   };
 
   // Update creative row field
@@ -480,6 +544,49 @@ export default function CreativePlanner({
 
   const availableContentWriters = useMemo(() => getContentWriters(), [projectAssignedTeam]);
 
+  // Get Testers from project assigned team
+  const getTesters = () => {
+    if (!projectAssignedTeam || Object.keys(projectAssignedTeam).length === 0) return [];
+
+    const testers = [];
+    const arrayField = projectAssignedTeam.testers;
+
+    if (arrayField && Array.isArray(arrayField) && arrayField.length > 0) {
+      arrayField.forEach(member => {
+        if (member) {
+          if (typeof member === 'object' && member !== null) {
+            if (member._id || member.name) {
+              testers.push({
+                _id: member._id?.toString?.() || member._id || String(member),
+                name: member.name || 'Unknown'
+              });
+            }
+          } else if (typeof member === 'string') {
+            testers.push({ _id: member, name: 'Team Member' });
+          }
+        }
+      });
+    }
+
+    if (testers.length === 0) {
+      const legacyField = projectAssignedTeam.tester;
+      if (legacyField) {
+        if (typeof legacyField === 'object' && legacyField !== null) {
+          testers.push({
+            _id: legacyField._id?.toString?.() || legacyField._id || String(legacyField),
+            name: legacyField.name || 'Unknown'
+          });
+        } else if (typeof legacyField === 'string') {
+          testers.push({ _id: legacyField, name: 'Team Member' });
+        }
+      }
+    }
+
+    return testers;
+  };
+
+  const availableTesters = useMemo(() => getTesters(), [projectAssignedTeam]);
+
   // Calculate totals
   const totalCreatives = creativePlan.length;
   const imageCount = creativePlan.filter(c => c.creativeType === 'IMAGE').length;
@@ -509,7 +616,7 @@ export default function CreativePlanner({
           isNewRow: true,
           assignedRole: row.assignedRole || '',
           newTeamMembers: [...(row.assignedTeamMembers || [])],
-          newContentWriter: row.contentWriter || ''
+          newContentWriters: [...(row.contentWriters || [])]
         });
         return;
       }
@@ -521,7 +628,7 @@ export default function CreativePlanner({
           isNewRow: false,
           assignedRole: row.assignedRole || '',
           newTeamMembers: [...(row.assignedTeamMembers || [])],
-          newContentWriter: row.contentWriter || ''
+          newContentWriters: [...(row.contentWriters || [])]
         });
         return;
       }
@@ -531,18 +638,18 @@ export default function CreativePlanner({
       const currMembers = (row.assignedTeamMembers || []).map(String);
       const addedMembers = currMembers.filter(m => !prevMembers.has(m));
 
-      // Compare content writer
-      const prevWriter = String(prev.contentWriter || '');
-      const currWriter = String(row.contentWriter || '');
-      const writerChanged = currWriter && currWriter !== prevWriter;
+      // Compare content writers (array)
+      const prevWriters = new Set((prev.contentWriters || []).map(String));
+      const currWriters = (row.contentWriters || []).map(String);
+      const addedWriters = currWriters.filter(w => !prevWriters.has(w));
 
-      if (addedMembers.length > 0 || writerChanged) {
+      if (addedMembers.length > 0 || addedWriters.length > 0) {
         diff.push({
           rowId,
           isNewRow: false,
           assignedRole: row.assignedRole || '',
           newTeamMembers: addedMembers,
-          newContentWriter: writerChanged ? currWriter : ''
+          newContentWriters: addedWriters
         });
       }
     });
@@ -552,11 +659,43 @@ export default function CreativePlanner({
 
   // Handle save
   const handleSave = async (markComplete = false) => {
-    // ─── FIX: Guard against concurrent saves
-    if (saving) return;
+    // ─── FIX: Guard against concurrent saves using both ref and state
+    // Ref provides immediate synchronous check, state provides UI feedback
+    if (saving || isSavingRef.current) return;
 
     try {
       setSaving(true);
+      isSavingRef.current = true;
+
+      // Validate that each creative has all required fields including tester
+      const invalidCreatives = creativePlan.filter(row =>
+        !row.adType ||
+        !row.creativeType ||
+        !row.subType ||
+        row.screenSizes.length === 0 ||
+        !row.assignedRole ||
+        row.assignedTeamMembers.length === 0
+      );
+
+      // Check for creatives missing tester assignment
+      const creativesWithoutTester = creativePlan.filter(row =>
+        !row.assignedTesters || row.assignedTesters.length === 0
+      );
+
+      if (markComplete && creativePlan.length === 0) {
+        toast.error('Please add at least one creative');
+        return;
+      }
+
+      if (markComplete && invalidCreatives.length > 0) {
+        toast.error('Please fill all required fields for each creative');
+        return;
+      }
+
+      if (markComplete && creativesWithoutTester.length > 0) {
+        toast.error('Please select a Tester for each creative');
+        return;
+      }
 
       const validCreatives = creativePlan.filter(row =>
         row.adType &&
@@ -585,7 +724,8 @@ export default function CreativePlanner({
           screenSizes: row.screenSizes || [],
           assignedRole: row.assignedRole || '',
           assignedTeamMembers: row.assignedTeamMembers || [],
-          contentWriter: row.contentWriter || '',
+          contentWriters: row.contentWriters || [],
+          assignedTesters: row.assignedTesters || [],
           adIntent: row.adIntent || '',
           aiFramework: row.aiFramework || '',
           aiSubCategory: row.aiSubCategory || '',
@@ -624,8 +764,9 @@ export default function CreativePlanner({
         // diff correctly.
         _id: r._id,
         assignedTeamMembers: [...(r.assignedTeamMembers || [])],
-        contentWriter: r.contentWriter || '',
-        assignedRole: r.assignedRole || ''
+        contentWriters: [...(r.contentWriters || [])],
+        assignedRole: r.assignedRole || '',
+        assignedTesters: [...(r.assignedTesters || [])]
       }));
 
       // ─── AUTO-SAVE: Clear draft from localStorage when completed
@@ -640,6 +781,7 @@ export default function CreativePlanner({
     } finally {
       // ─── FIX: Always reset saving flag, even if an error was thrown
       setSaving(false);
+      isSavingRef.current = false;
     }
   };
 
@@ -736,13 +878,20 @@ export default function CreativePlanner({
                 <div className="flex items-center gap-2">
                   {!readOnly && (
                     <button
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        removeCreativeRow(row._id);
+                        if (deleting) return;
+                        await removeCreativeRow(row._id);
                       }}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      disabled={deleting}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Delete creative"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      {deleting ? (
+                        <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
                     </button>
                   )}
                   {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
@@ -880,29 +1029,48 @@ export default function CreativePlanner({
                         Team Member
                       </label>
                       {row.assignedRole ? (
-                        <div className="space-y-1">
-                          <select
-                            value={(row.assignedTeamMembers && row.assignedTeamMembers[0]) || ''}
-                            onChange={(e) => updateCreativeRow(row._id, 'assignedTeamMembers', e.target.value ? [e.target.value] : [])}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                            disabled={readOnly}
-                          >
-                            <option value="">Select team member...</option>
-                            {getProjectAssignedMembers(row.assignedRole).map(member => (
-                              <option key={member._id} value={member._id}>
-                                {member.name}
-                              </option>
-                            ))}
-                          </select>
-                          {getProjectAssignedMembers(row.assignedRole).length === 0 && (
-                            <p className="text-xs text-gray-500 mt-1">
+                        <div className="space-y-2">
+                          {getProjectAssignedMembers(row.assignedRole).length === 0 ? (
+                            <p className="text-xs text-gray-500 italic">
                               No team members assigned for this role yet.
                             </p>
+                          ) : (
+                            <div className="space-y-1 max-h-40 overflow-y-auto">
+                              {getProjectAssignedMembers(row.assignedRole).map(member => {
+                                const isSelected = (row.assignedTeamMembers || []).includes(member._id);
+                                return (
+                                  <button
+                                    key={member._id}
+                                    type="button"
+                                    onClick={() => {
+                                      const currentMembers = row.assignedTeamMembers || [];
+                                      if (isSelected) {
+                                        updateCreativeRow(row._id, 'assignedTeamMembers', currentMembers.filter(id => id !== member._id));
+                                      } else {
+                                        updateCreativeRow(row._id, 'assignedTeamMembers', [...currentMembers, member._id]);
+                                      }
+                                    }}
+                                    disabled={readOnly}
+                                    className={`flex items-center gap-2 w-full px-3 py-1.5 rounded-lg border text-sm transition-all ${
+                                      isSelected
+                                        ? 'bg-primary-50 border-primary-300 text-primary-700'
+                                        : 'bg-white border-gray-200 text-gray-600 hover:border-primary-200 hover:bg-primary-25'
+                                    } ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                  >
+                                    <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-primary-500 border-primary-500' : 'border-gray-300'}`}>
+                                      {isSelected && <Check className="w-3 h-3 text-white" />}
+                                    </div>
+                                    <span className="truncate">{member.name}</span>
+                                    {member.isProjectAssigned && (
+                                      <span className="text-xs text-primary-500 flex-shrink-0">Project</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           )}
-                          {getProjectAssignedMembers(row.assignedRole).length > 0 && (
-                            <p className="text-xs text-gray-500">
-                              Select from team members assigned to this project
-                            </p>
+                          {(row.assignedTeamMembers || []).length > 0 && (
+                            <p className="text-xs text-gray-500">{(row.assignedTeamMembers || []).length} member{(row.assignedTeamMembers || []).length !== 1 ? 's' : ''} selected</p>
                           )}
                         </div>
                       ) : (
@@ -914,42 +1082,108 @@ export default function CreativePlanner({
                   </div>
 
                   {/* Row 4.5: Content Planner */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-                        <FileText className="w-4 h-4 text-gray-400" />
-                        Content Planner
-                      </label>
-                      <select
-                        value={row.contentWriter || ''}
-                        onChange={(e) => updateCreativeRow(row._id, 'contentWriter', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                        disabled={readOnly}
-                      >
-                        <option value="">Select Content Planner...</option>
-                        {availableContentWriters.map(writer => (
-                          <option key={writer._id} value={writer._id}>
-                            {writer.name}
-                          </option>
-                        ))}
-                      </select>
-                      {availableContentWriters.length === 0 && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          No Content Planners assigned yet.
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      Content Planners
+                    </label>
+                    <div className="space-y-2">
+                      {availableContentWriters.length === 0 ? (
+                        <p className="text-xs text-gray-500 italic">
+                          No Content Planners assigned to this project. Please contact admin.
                         </p>
+                      ) : (
+                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                          {availableContentWriters.map(writer => {
+                            const isSelected = (row.contentWriters || []).includes(writer._id);
+                            return (
+                              <button
+                                key={writer._id}
+                                type="button"
+                                onClick={() => {
+                                  const currentWriters = row.contentWriters || [];
+                                  if (isSelected) {
+                                    updateCreativeRow(row._id, 'contentWriters', currentWriters.filter(id => id !== writer._id));
+                                  } else {
+                                    updateCreativeRow(row._id, 'contentWriters', [...currentWriters, writer._id]);
+                                  }
+                                }}
+                                disabled={readOnly}
+                                className={`flex items-center gap-2 w-full px-3 py-1.5 rounded-lg border text-sm transition-all ${
+                                  isSelected
+                                    ? 'bg-purple-50 border-purple-300 text-purple-700'
+                                    : 'bg-white border-gray-200 text-gray-600 hover:border-purple-200 hover:bg-purple-25'
+                                } ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                              >
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-purple-500 border-purple-500' : 'border-gray-300'}`}>
+                                  {isSelected && <Check className="w-3 h-3 text-white" />}
+                                </div>
+                                <span className="truncate">{writer.name}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {(row.contentWriters || []).length > 0 && (
+                        <p className="text-xs text-gray-500">{(row.contentWriters || []).length} writer{(row.contentWriters || []).length !== 1 ? 's' : ''} selected</p>
                       )}
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">&nbsp;</label>
-                      <p className="text-xs text-gray-500 italic">
-                        The Content Planner creates the copy/text for this creative.
-                        Select from writers assigned to the project by Admin.
-                      </p>
+                    <p className="text-xs text-gray-500 italic mt-2">
+                      The Content Planner creates the copy/text for this creative. Select from writers assigned to the project.
+                    </p>
+                  </div>
+
+                  {/* Row 4.55: Testers Selection */}
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                      <CheckSquare className="w-4 h-4 text-gray-400" />
+                      Testers <span className="text-red-500">*</span>
+                    </label>
+                    <div className="space-y-2">
+                      {availableTesters.length === 0 ? (
+                        <p className="text-xs text-red-500 italic">
+                          No Testers assigned to this project. Please contact admin.
+                        </p>
+                      ) : (
+                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                          {availableTesters.map(tester => {
+                            const isSelected = (row.assignedTesters || []).includes(tester._id);
+                            return (
+                              <button
+                                key={tester._id}
+                                type="button"
+                                onClick={() => {
+                                  const currentTesters = row.assignedTesters || [];
+                                  if (isSelected) {
+                                    updateCreativeRow(row._id, 'assignedTesters', currentTesters.filter(id => id !== tester._id));
+                                  } else {
+                                    updateCreativeRow(row._id, 'assignedTesters', [...currentTesters, tester._id]);
+                                  }
+                                }}
+                                disabled={readOnly}
+                                className={`flex items-center gap-2 w-full px-3 py-1.5 rounded-lg border text-sm transition-all ${
+                                  isSelected
+                                    ? 'bg-orange-50 border-orange-300 text-orange-700'
+                                    : 'bg-white border-gray-200 text-gray-600 hover:border-orange-200 hover:bg-orange-25'
+                                } ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                              >
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-orange-500 border-orange-500' : 'border-gray-300'}`}>
+                                  {isSelected && <Check className="w-3 h-3 text-white" />}
+                                </div>
+                                <span className="truncate">{tester.name}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {(row.assignedTesters || []).length > 0 && (
+                        <p className="text-xs text-gray-500">{(row.assignedTesters || []).length} tester{(row.assignedTesters || []).length !== 1 ? 's' : ''} selected</p>
+                      )}
                     </div>
                   </div>
 
                   {/* Row 4.6: Framework & Subcategory for Content Planner */}
-                  {row.contentWriter && (
+                  {(row.contentWriters || []).length > 0 && (
                     <div className="grid grid-cols-2 gap-4 bg-purple-50 p-3 rounded-lg border border-purple-200">
                       <div>
                         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
@@ -1081,13 +1315,20 @@ export default function CreativePlanner({
               variant="outline"
               onClick={() => handleSave(false)}
               disabled={saving}
+              className={saving ? 'opacity-50 cursor-not-allowed' : ''}
             >
-              {saving ? 'Saving...' : isCompleted ? 'Update Changes' : 'Save Progress'}
+              {saving ? (
+                <>
+                  <span className="animate-spin mr-2">⏳</span>
+                  Saving...
+                </>
+              ) : isCompleted ? 'Update Changes' : 'Save Progress'}
             </Button>
             {!isCompleted && (
               <Button
                 onClick={() => handleSave(true)}
                 disabled={saving}
+                className={saving ? 'opacity-50 cursor-not-allowed' : ''}
               >
                 <CheckCircle className="w-4 h-4 mr-2" />
                 {saving ? 'Saving...' : 'Complete & Continue'}

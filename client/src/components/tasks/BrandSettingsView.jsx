@@ -6,6 +6,21 @@ import {
 } from 'lucide-react';
 import { Card, CardBody, CardHeader, Button, Spinner } from '@/components/ui';
 
+// Get the API base URL with fallback
+const getApiBaseUrl = () => {
+  // Support both Vite and Create React App environment variables
+  return import.meta.env?.VITE_API_URL || process.env.REACT_APP_API_URL || 'http://localhost:5000';
+};
+
+// Utility function to get brand manual URL - always use API endpoint
+const getBrandManualUrl = (brandManual, projectId) => {
+  if (!brandManual || !projectId) return null;
+
+  // Always use our API endpoint - server handles both local and Cloudinary files
+  const baseUrl = getApiBaseUrl();
+  return `${baseUrl}/api/brand-settings/${projectId}/manual/file`;
+};
+
 // Common font families
 const FONT_FAMILIES = [
   'Inter', 'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Poppins', 'Raleway',
@@ -37,6 +52,9 @@ export default function BrandSettingsView({ projectId, taskId, onGeneratePrompt,
   // Logo selection state
   const [selectedLogo, setSelectedLogo] = useState('brand');
 
+  // Brand manual acknowledgment state
+  const [brandManualAcknowledged, setBrandManualAcknowledged] = useState(false);
+
   // Track if designer has made changes
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -52,6 +70,23 @@ export default function BrandSettingsView({ projectId, taskId, onGeneratePrompt,
       const brandResponse = await brandSettingsService.getBrandSettings(projectId);
       if (brandResponse.data) {
         setBrandSettings(brandResponse.data);
+
+        // Initialize editable states from brand settings by default
+        // These will be overridden by designerBrandOverrides if they exist
+        if (brandResponse.data.colors) {
+          setEditedColors({
+            primary: brandResponse.data.colors.primary || { hex: '', name: 'Primary' },
+            secondary: brandResponse.data.colors.secondary || { hex: '', name: 'Secondary' },
+            tertiary: brandResponse.data.colors.tertiary || { hex: '', name: 'Tertiary' }
+          });
+        }
+        if (brandResponse.data.typography) {
+          setEditedTypography({
+            title: brandResponse.data.typography.title || { fontFamily: '' },
+            subtitle: brandResponse.data.typography.subtitle || { fontFamily: '' },
+            body: brandResponse.data.typography.body || { fontFamily: '' }
+          });
+        }
       }
 
       // Fetch task if taskId provided
@@ -60,7 +95,7 @@ export default function BrandSettingsView({ projectId, taskId, onGeneratePrompt,
         if (taskResponse.data) {
           setTask(taskResponse.data);
 
-          // Load designer overrides if they exist
+          // Load designer overrides if they exist (these take priority over brand settings)
           if (taskResponse.data.designerBrandOverrides) {
             const overrides = taskResponse.data.designerBrandOverrides;
 
@@ -82,6 +117,11 @@ export default function BrandSettingsView({ projectId, taskId, onGeneratePrompt,
 
             if (overrides.selectedLogo) {
               setSelectedLogo(overrides.selectedLogo);
+            }
+
+            // Load brand manual acknowledgment status
+            if (overrides.brandManualReference?.acknowledged) {
+              setBrandManualAcknowledged(true);
             }
           }
 
@@ -149,10 +189,19 @@ export default function BrandSettingsView({ projectId, taskId, onGeneratePrompt,
 
     try {
       setSaving(true);
+
+      // Prepare brand manual reference if acknowledged
+      const brandManualRef = brandManualAcknowledged && brandSettings?.brandManual ? {
+        fileName: brandSettings.brandManual.fileName,
+        filePath: brandSettings.brandManual.filePath,
+        acknowledged: true
+      } : null;
+
       await taskService.saveDesignerBrandOverrides(taskId, {
         colors: editedColors,
         typography: editedTypography,
-        selectedLogo
+        selectedLogo,
+        brandManualReference: brandManualRef
       });
       setHasChanges(false);
       toast.success('Brand settings saved successfully');
@@ -299,6 +348,11 @@ export default function BrandSettingsView({ projectId, taskId, onGeneratePrompt,
               <FileText className="w-5 h-5" />
               Brand Manual
             </h3>
+            {editable && taskId && (
+              <p className="text-sm text-gray-500 mt-1">
+                Review and acknowledge the brand manual to keep a record for your reference
+              </p>
+            )}
           </CardHeader>
           <CardBody>
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
@@ -311,15 +365,98 @@ export default function BrandSettingsView({ projectId, taskId, onGeneratePrompt,
                   </p>
                 </div>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.open(brandSettings.brandManual.filePath, '_blank')}
-              >
-                <ExternalLink className="w-4 h-4 mr-2" />
-                View Manual
-              </Button>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      const url = getBrandManualUrl(brandSettings.brandManual, projectId);
+                      const response = await fetch(url);
+                      if (!response.ok) {
+                        const data = await response.json();
+                        toast.error(data.message || 'Failed to load brand manual');
+                        return;
+                      }
+                      window.open(url, '_blank');
+                    } catch (error) {
+                      toast.error('Failed to open brand manual');
+                    }
+                  }}
+                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  View Manual
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const url = getBrandManualUrl(brandSettings.brandManual, projectId);
+                      const response = await fetch(url);
+                      if (!response.ok) {
+                        const data = await response.json();
+                        toast.error(data.message || 'Failed to load brand manual');
+                        return;
+                      }
+                      const blob = await response.blob();
+                      const downloadUrl = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = downloadUrl;
+                      a.download = brandSettings.brandManual.fileName || 'brand-manual.pdf';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      window.URL.revokeObjectURL(downloadUrl);
+                    } catch (error) {
+                      toast.error('Failed to download brand manual');
+                    }
+                  }}
+                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download
+                </button>
+              </div>
             </div>
+
+            {/* Brand Manual Acknowledgment - for designers */}
+            {editable && taskId && (
+              <div className="mt-4 p-4 border rounded-lg bg-blue-50 border-blue-200">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={brandManualAcknowledged}
+                    onChange={(e) => {
+                      setBrandManualAcknowledged(e.target.checked);
+                      setHasChanges(true);
+                    }}
+                    className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                  />
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      I have reviewed the brand manual
+                    </p>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Check this box to save the brand manual reference to your task record. This will also be available for the developer when implementing your design.
+                    </p>
+                  </div>
+                </label>
+                {task?.designerBrandOverrides?.brandManualReference?.acknowledgedAt && (
+                  <p className="text-xs text-gray-500 mt-2 ml-7">
+                    <Check className="w-3 h-3 inline mr-1 text-green-600" />
+                    Acknowledged on {new Date(task.designerBrandOverrides.brandManualReference.acknowledgedAt).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Show acknowledgment status for developers/testers (read-only) */}
+            {!editable && task?.designerBrandOverrides?.brandManualReference?.acknowledged && (
+              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm text-green-700 flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  Designer has acknowledged this brand manual
+                </p>
+              </div>
+            )}
           </CardBody>
         </Card>
       )}
@@ -377,17 +514,17 @@ export default function BrandSettingsView({ projectId, taskId, onGeneratePrompt,
                       <Check className="w-5 h-5 text-green-600" />
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      window.open(brandSettings.logos.primary.filePath, '_blank');
-                    }}
+                  <a
+                    href={brandSettings.logos.primary.filePath}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download={brandSettings.logos.primary.fileName || 'brand-logo.png'}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center px-2 py-1 text-sm font-medium rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   >
                     <Download className="w-4 h-4 mr-1" />
                     Download
-                  </Button>
+                  </a>
                 </div>
                 <div className="bg-white border border-gray-200 rounded-lg p-4">
                   <img
@@ -420,17 +557,17 @@ export default function BrandSettingsView({ projectId, taskId, onGeneratePrompt,
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.open(task.customLogo.path, '_blank');
-                      }}
+                    <a
+                      href={task.customLogo.path}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download={task.customLogo.name || 'custom-logo.png'}
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center px-2 py-1 text-sm font-medium rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                     >
                       <Download className="w-4 h-4 mr-1" />
                       Download
-                    </Button>
+                    </a>
                     {editable && (
                       <Button
                         variant="ghost"
@@ -481,14 +618,16 @@ export default function BrandSettingsView({ projectId, taskId, onGeneratePrompt,
               <div className="p-4 border border-gray-200 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="font-medium text-gray-900">Secondary Logo</h4>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => window.open(brandSettings.logos.secondary.filePath, '_blank')}
+                  <a
+                    href={brandSettings.logos.secondary.filePath}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download={brandSettings.logos.secondary.fileName || 'secondary-logo.png'}
+                    className="inline-flex items-center px-2 py-1 text-sm font-medium rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   >
                     <Download className="w-4 h-4 mr-1" />
                     Download
-                  </Button>
+                  </a>
                 </div>
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <img
@@ -571,6 +710,48 @@ export default function BrandSettingsView({ projectId, taskId, onGeneratePrompt,
         </Card>
       )}
 
+      {/* Brand Colors - Read Only (for developers/testers) */}
+      {!editable && (
+        <Card>
+          <CardHeader>
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Palette className="w-5 h-5" />
+              Brand Colors
+            </h3>
+            <p className="text-sm text-gray-500">Click on color swatch to copy hex value</p>
+          </CardHeader>
+          <CardBody>
+            <div className="grid grid-cols-3 gap-4">
+              {Object.entries(editedColors).map(([key, color]) => (
+                color.hex && (
+                  <div key={key} className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700 capitalize">
+                      {key} Color
+                    </label>
+                    <div
+                      className="w-full h-16 rounded-lg border border-gray-200 cursor-pointer flex items-end justify-center pb-2 relative group"
+                      style={{ backgroundColor: color.hex || '#ffffff' }}
+                      onClick={() => color.hex && copyColorToClipboard(color.hex)}
+                      title="Click to copy"
+                    >
+                      <span className="text-xs font-mono px-2 py-1 rounded bg-white/90 text-gray-800 shadow-sm">
+                        {color.hex}
+                      </span>
+                    </div>
+                    {color.name && color.name !== key.charAt(0).toUpperCase() + key.slice(1) && (
+                      <p className="text-xs text-gray-500">{color.name}</p>
+                    )}
+                  </div>
+                )
+              ))}
+            </div>
+            {Object.values(editedColors).every(c => !c?.hex) && (
+              <p className="text-sm text-gray-500 text-center py-4">No brand colors configured</p>
+            )}
+          </CardBody>
+        </Card>
+      )}
+
       {/* Typography - Editable */}
       {editable && (
         <Card>
@@ -621,6 +802,47 @@ export default function BrandSettingsView({ projectId, taskId, onGeneratePrompt,
                   )}
                 </div>
               ))}
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* Typography - Read Only (for developers/testers) */}
+      {!editable && (
+        <Card>
+          <CardHeader>
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Type className="w-5 h-5" />
+              Typography
+            </h3>
+          </CardHeader>
+          <CardBody>
+            <div className="space-y-4">
+              {Object.entries(editedTypography).map(([key, typo]) => (
+                typo.fontFamily && (
+                  <div key={key} className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700 capitalize">
+                      {key} Font
+                    </label>
+                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="text-xs text-gray-500 mb-2 font-mono">{typo.fontFamily}</p>
+                      <div
+                        style={{
+                          fontFamily: typo.fontFamily,
+                          fontSize: key === 'title' ? '24px' : key === 'subtitle' ? '18px' : '16px'
+                        }}
+                      >
+                        {key === 'title' ? 'The Quick Brown Fox Jumps Over The Lazy Dog' :
+                         key === 'subtitle' ? 'A compelling subtitle that captures attention' :
+                         'Lorem ipsum dolor sit amet, consectetur adipiscing elit.'}
+                      </div>
+                    </div>
+                  </div>
+                )
+              ))}
+              {Object.values(editedTypography).every(t => !t?.fontFamily) && (
+                <p className="text-sm text-gray-500 text-center py-4">No typography configured</p>
+              )}
             </div>
           </CardBody>
         </Card>

@@ -15,6 +15,7 @@ const Subscription = require('../models/Subscription');
 const Plan = require('../models/Plan');
 const UsageLog = require('../models/UsageLog');
 const { BillingService } = require('../services/billingService');
+const { buildUrl } = require('../utils/urlHelper');
 
 /**
  * @desc    Get available plans (public)
@@ -142,7 +143,7 @@ const createCheckout = async (req, res) => {
     }
 
     // Create checkout
-    const returnUrl = `${process.env.CLIENT_URL}/dashboard/billing?session_id={CHECKOUT_SESSION_ID}`;
+    const returnUrl = buildUrl('/dashboard/billing?session_id={CHECKOUT_SESSION_ID}');
 
     const checkout = await BillingService.createCheckout(
       organization,
@@ -770,7 +771,7 @@ const createPortalSession = async (req, res) => {
       });
     }
 
-    const portalUrl = `${process.env.CLIENT_URL}/dashboard/billing`;
+    const portalUrl = buildUrl('/dashboard/billing');
     const session = await BillingService.createPortalSession(
       organization.stripeCustomerId,
       returnUrl || portalUrl
@@ -1045,8 +1046,8 @@ const createInitialCheckout = async (req, res) => {
           quantity: 1
         }],
         mode: 'subscription',
-        success_url: `${process.env.CLIENT_URL}/onboarding?session_id={CHECKOUT_SESSION_ID}&success=true`,
-        cancel_url: `${process.env.CLIENT_URL}/onboarding?canceled=true`,
+        success_url: buildUrl('/onboarding?session_id={CHECKOUT_SESSION_ID}&success=true'),
+        cancel_url: buildUrl('/onboarding?canceled=true'),
         metadata: {
           userId: userId.toString(),
           planId: plan._id.toString(),

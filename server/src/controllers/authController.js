@@ -2,6 +2,8 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const sendEmail = require('../utils/sendEmail');
+const { buildUrl } = require('../utils/urlHelper');
+const baseTemplate = require('../utils/emailTemplates/baseTemplate');
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -91,7 +93,7 @@ exports.login = async (req, res, next) => {
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Invalid password'
       });
     }
 
@@ -923,7 +925,7 @@ exports.forgotPassword = async (req, res, next) => {
     await user.save({ validateBeforeSave: false });
 
     // Create reset URL
-    const resetUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password/${resetToken}`;
+    const resetUrl = buildUrl(`/reset-password/${resetToken}`);
 
     // Create email message
     const message = `
@@ -937,45 +939,32 @@ This link will expire in 10 minutes.
 If you did not request this, please ignore this email and your password will remain unchanged.
 `;
 
-    const html = `
-<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="text-align: center; margin-bottom: 30px;">
-    <div style="width: 50px; height: 50px; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 15px;">
-      <span style="color: white; font-weight: bold; font-size: 20px;">GV</span>
-    </div>
-    <h1 style="color: #1f2937; margin: 0;">Password Reset Request</h1>
-  </div>
+    const content = `
+      <p class="greeting">Dear ${user.name || 'User'},</p>
+      <p>We received a request to reset the password for your Growth Valley account. If you made this request, please click the button below to create a new password.</p>
 
-  <p style="color: #4b5563; line-height: 1.6;">
-    You are receiving this email because you (or someone else) has requested a password reset for your Growth Valley Dashboard account.
-  </p>
+      <div class="button-wrapper">
+        <a href="${resetUrl}" class="primary-button">Reset Password</a>
+      </div>
 
-  <div style="text-align: center; margin: 30px 0;">
-    <a href="${resetUrl}" style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
-      Reset Password
-    </a>
-  </div>
+      <p class="text-center text-muted text-small">
+        Or copy and paste this link into your browser:<br>
+        <a href="${resetUrl}" class="secondary-link" style="font-size: 12px; word-break: break-all;">${resetUrl}</a>
+      </p>
 
-  <p style="color: #6b7280; font-size: 14px;">
-    Or copy and paste this link into your browser:<br>
-    <a href="${resetUrl}" style="color: #6366f1; word-break: break-all;">${resetUrl}</a>
-  </p>
+      <div class="alert alert-warning">
+        <div class="alert-title">Security Notice</div>
+        <p style="margin: 8px 0 0;">This password reset link will expire in <strong>10 minutes</strong> for your security. If you do not reset your password within this time, you will need to request a new link.</p>
+      </div>
 
-  <p style="color: #dc2626; font-size: 14px;">
-    ⏰ This link will expire in 10 minutes.
-  </p>
+      <hr class="divider">
 
-  <p style="color: #6b7280; font-size: 14px;">
-    If you did not request this, please ignore this email and your password will remain unchanged.
-  </p>
+      <p class="text-center text-muted text-small">
+        If you did not request this password reset, you may safely ignore this email. Your password will remain unchanged.
+      </p>
+    `;
 
-  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
-
-  <p style="color: #9ca3af; font-size: 12px; text-align: center;">
-    © ${new Date().getFullYear()} Growth Valley. All rights reserved.
-  </p>
-</div>
-`;
+    const html = baseTemplate(content, { title: 'Password Reset' });
 
     try {
       await sendEmail({

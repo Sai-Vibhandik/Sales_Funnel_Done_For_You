@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef  } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { platformAdminService } from '@/services/platformAdmin';
@@ -587,7 +587,6 @@ function OrganizationsTab() {
           {organizations.map((org) => (
             <Card key={org._id} className="hover:shadow-md transition-shadow">
               <CardBody className="p-4">
-                {/* CHANGED: stack info and actions vertically on mobile */}
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 flex-shrink-0 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-bold text-lg">
@@ -603,7 +602,7 @@ function OrganizationsTab() {
                       <p className="text-sm text-gray-500 truncate">{org.owner?.email || 'No owner'}</p>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Badge className={getPlanColor(getPlanName(org))}>
                         {getPlanName(org)}
@@ -612,8 +611,8 @@ function OrganizationsTab() {
                         {new Date(org.createdAt).toLocaleDateString()}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => handleViewOrg(org)}>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <Button variant="ghost" size="sm" onClick={() => handleViewOrg(org)} title="View">
                         <Eye size={16} />
                       </Button>
                       <Button
@@ -631,6 +630,7 @@ function OrganizationsTab() {
                           size="sm"
                           className="text-orange-600 hover:bg-orange-50"
                           onClick={() => setSuspendModal(org)}
+                          title="Suspend"
                         >
                           <Ban size={16} />
                         </Button>
@@ -640,6 +640,7 @@ function OrganizationsTab() {
                           size="sm"
                           className="text-green-600 hover:bg-green-50"
                           onClick={() => handleSuspend(org, false)}
+                          title="Unsuspend"
                         >
                           <Play size={16} />
                         </Button>
@@ -649,6 +650,7 @@ function OrganizationsTab() {
                         size="sm"
                         className="text-red-600 hover:bg-red-50"
                         onClick={() => setDeleteModal(org)}
+                        title="Delete"
                       >
                         <Trash2 size={16} />
                       </Button>
@@ -2028,6 +2030,62 @@ function PromptsTab() {
   );
 }
 
+
+function CustomSelect({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const selected = filterOptions.find((o) => o.value === value);
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-2 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm text-gray-700"
+      >
+        <span>{selected?.label || "All Actions"}</span>
+        <ChevronDown
+          size={16}
+          className={`text-gray-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <ul className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+          {filterOptions.map((option) => (
+            <li
+              key={option.value}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              className={`px-4 py-2 text-sm cursor-pointer hover:bg-blue-50 hover:text-blue-700 transition-colors
+                ${value === option.value ? "bg-blue-100 text-blue-700 font-medium" : "text-gray-700"}`}
+            >
+              {option.label}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+const filterOptions = [
+  { value: "", label: "All Actions" },
+  { value: "auth.login", label: "Login" },
+  { value: "org.create", label: "Org Created" },
+  { value: "org.member_invite", label: "Member Invited" },
+  { value: "platform", label: "Platform Actions" },
+];
 // Logs Tab
 function LogsTab() {
   const [logs, setLogs] = useState([]);
@@ -2053,7 +2111,7 @@ function LogsTab() {
   }, [actionFilter]);
 
   return (
-    <div className="space-y-4">
+       <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-gray-900">Activity Logs</h3>
         <Button variant="outline" onClick={fetchLogs}>
@@ -2062,23 +2120,14 @@ function LogsTab() {
         </Button>
       </div>
 
-      <select
-        value={actionFilter}
-        onChange={(e) => setActionFilter(e.target.value)}
-        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-      >
-        <option value="">All Actions</option>
-        <option value="auth.login">Login</option>
-        <option value="org.create">Org Created</option>
-        <option value="org.member_invite">Member Invited</option>
-        <option value="platform">Platform Actions</option>
-      </select>
+      {/* Replaced native <select> with CustomSelect */}
+      <CustomSelect value={actionFilter} onChange={setActionFilter} />
 
       {loading ? (
         <Spinner size="lg" className="mx-auto mt-8" />
       ) : logs.length === 0 ? (
         <Card>
-          <CardBody className="p-12 text-center">
+          <CardBody className="p-4 text-center">
             <Activity className="w-12 h-12 mx-auto text-gray-300 mb-4" />
             <p className="text-gray-500">No logs found</p>
           </CardBody>
@@ -2086,7 +2135,6 @@ function LogsTab() {
       ) : (
         <Card>
           <CardBody className="p-0">
-            {/* CHANGED: horizontal scroll wrapper for table on mobile */}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[600px]">
                 <thead className="bg-gray-50">
@@ -2099,22 +2147,40 @@ function LogsTab() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {logs.map((log) => (
-                    <tr key={log._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">{new Date(log.createdAt).toLocaleString()}</td>
-                      <td className="px-4 py-3">
-                        <div className="text-sm font-medium text-gray-900">{log.userId?.name || 'System'}</div>
-                        <div className="text-xs text-gray-500">{log.userId?.email}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge className="bg-blue-100 text-blue-700 whitespace-nowrap">{log.action}</Badge>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">{log.organizationId?.name || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
-                        {log.details ? JSON.stringify(log.details).substring(0, 50) + '...' : '-'}
-                      </td>
-                    </tr>
-                  ))}
+                  {logs
+                    .filter((log) =>
+                      actionFilter === ""
+                        ? true
+                        : actionFilter === "platform"
+                        ? log.action.startsWith("platform")
+                        : log.action === actionFilter
+                    )
+                    .map((log) => (
+                      <tr key={log._id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+                          {new Date(log.createdAt).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm font-medium text-gray-900">
+                            {log.userId?.name || "System"}
+                          </div>
+                          <div className="text-xs text-gray-500">{log.userId?.email}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge className="bg-blue-100 text-blue-700 whitespace-nowrap">
+                            {log.action}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {log.organizationId?.name || "-"}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {log.details
+                            ? JSON.stringify(log.details).substring(0, 50) + "..."
+                            : "-"}
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>

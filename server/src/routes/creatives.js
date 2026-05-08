@@ -6,6 +6,7 @@ const {
   addCreative,
   updateCreative,
   deleteCreative,
+  deleteCreativePlanItem,
   generateCreativeCards,
   addAdType,
   removeAdType,
@@ -31,5 +32,7 @@ router.put('/:projectId/notes', authorize('performance_marketer'), checkStageAcc
 router.post('/:projectId/stages/:stage/creatives', authorize('performance_marketer'), checkStageAccess('creativeStrategy'), addCreative);
 router.put('/:projectId/stages/:stage/creatives/:creativeId', authorize('performance_marketer'), checkStageAccess('creativeStrategy'), updateCreative);
 router.delete('/:projectId/stages/:stage/creatives/:creativeId', authorize('performance_marketer'), checkStageAccess('creativeStrategy'), deleteCreative);
+// Delete creative plan item (new creative plan system)
+router.delete('/:projectId/creative-plan/:itemId', authorize('performance_marketer'), checkStageAccess('creativeStrategy'), deleteCreativePlanItem);
 
 module.exports = router;

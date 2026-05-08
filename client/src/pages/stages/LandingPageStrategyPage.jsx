@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, CardBody, CardHeader, Button, Input, Textarea, Spinner } from '@/components/ui';
 import { StageProgressTracker } from '@/components/workflow';
-import { ArrowLeft, ArrowRight, Users, Code, Palette, Undo2, FileText, CheckCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Users, Code, Palette, Undo2, FileText, CheckCircle, Check } from 'lucide-react';
 import { projectService, brandSettingsService } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { Eye } from 'lucide-react';
@@ -33,6 +33,28 @@ const PLATFORMS = [
   { id: 'multi', label: 'Multi-Platform' },
 ];
 
+// Helper function to extract member IDs from team array
+const extractMemberIds = (members) => {
+  if (!members || !Array.isArray(members)) return [];
+  return members.map(m => {
+    if (typeof m === 'object' && m !== null) {
+      return m._id?.toString() || m._id || String(m);
+    }
+    return String(m);
+  });
+};
+
+// Helper function to normalize member list for display
+const normalizeMemberList = (members) => {
+  if (!members || !Array.isArray(members)) return [];
+  return members.map(m => {
+    if (typeof m === 'object' && m !== null) {
+      return { _id: m._id?.toString() || m._id || String(m), name: m.name || 'Unknown' };
+    }
+    return { _id: String(m), name: 'Team Member' };
+  });
+};
+
 export default function LandingPageStrategyPage() {
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get('projectId');
@@ -42,12 +64,18 @@ export default function LandingPageStrategyPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [project, setProject] = useState(null);
-  const [designers, setDesigners] = useState([]);
-  const [developers, setDevelopers] = useState([]);
   const [brandSettings, setBrandSettings] = useState(null);
   const [brandSettingsLoading, setBrandSettingsLoading] = useState(true);
 
-  // Form state
+  // Available team members from project
+  const [availableDesigners, setAvailableDesigners] = useState([]);
+  const [availableDevelopers, setAvailableDevelopers] = useState([]);
+  const [availableContentWriters, setAvailableContentWriters] = useState([]);
+  const [availableGraphicDesigners, setAvailableGraphicDesigners] = useState([]);
+  const [availableVideoEditors, setAvailableVideoEditors] = useState([]);
+  const [availableTesters, setAvailableTesters] = useState([]);
+
+  // Form state - multi-select arrays
   const [name, setName] = useState('');
   const [funnelType, setFunnelType] = useState('video_sales_letter');
   const [hook, setHook] = useState('');
@@ -56,8 +84,12 @@ export default function LandingPageStrategyPage() {
   const [cta, setCta] = useState('');
   const [offer, setOffer] = useState('');
   const [messaging, setMessaging] = useState('');
-  const [assignedDesigner, setAssignedDesigner] = useState('');
-  const [assignedDeveloper, setAssignedDeveloper] = useState('');
+  const [assignedDesigners, setAssignedDesigners] = useState([]);
+  const [assignedDevelopers, setAssignedDevelopers] = useState([]);
+  const [assignedContentWriters, setAssignedContentWriters] = useState([]);
+  const [assignedGraphicDesigners, setAssignedGraphicDesigners] = useState([]);
+  const [assignedVideoEditors, setAssignedVideoEditors] = useState([]);
+  const [assignedTesters, setAssignedTesters] = useState([]);
 
   // Permission checks - Only Performance Marketer can edit, Admin view only
   const isAdmin = user?.role === 'admin';
@@ -77,29 +109,46 @@ export default function LandingPageStrategyPage() {
       setLoading(true);
 
       const projectRes = await projectService.getProject(projectId);
-      console.log('=== LandingPageStrategyPage fetchData ===');
-      console.log('projectRes.data:', projectRes.data);
       setProject(projectRes.data);
 
-      // Extract designers and developers from project's assigned team
+      // Extract all team members from project's assigned team
       const assignedTeam = projectRes.data.assignedTeam || {};
-      console.log('assignedTeam:', assignedTeam);
-      console.log('uiUxDesigners:', assignedTeam.uiUxDesigners);
-      console.log('developers:', assignedTeam.developers);
 
-      // Get UI/UX Designers - support both array and legacy single field
-      const uiUxDesigners = assignedTeam.uiUxDesigners || [];
+      // UI/UX Designers
+      const uiUxDesigners = normalizeMemberList(assignedTeam.uiUxDesigners || []);
       const uiUxDesignerLegacy = assignedTeam.uiUxDesigner;
-      const allDesigners = uiUxDesigners.length > 0 ? uiUxDesigners : (uiUxDesignerLegacy ? [uiUxDesignerLegacy] : []);
-      console.log('allDesigners:', allDesigners);
-      setDesigners(allDesigners);
+      const allDesigners = uiUxDesigners.length > 0 ? uiUxDesigners : (uiUxDesignerLegacy ? normalizeMemberList([uiUxDesignerLegacy]) : []);
+      setAvailableDesigners(allDesigners);
 
-      // Get Developers - support both array and legacy single field
-      const developersList = assignedTeam.developers || [];
+      // Developers
+      const developers = normalizeMemberList(assignedTeam.developers || []);
       const developerLegacy = assignedTeam.developer;
-      const allDevelopers = developersList.length > 0 ? developersList : (developerLegacy ? [developerLegacy] : []);
-      console.log('allDevelopers:', allDevelopers);
-      setDevelopers(allDevelopers);
+      const allDevelopers = developers.length > 0 ? developers : (developerLegacy ? normalizeMemberList([developerLegacy]) : []);
+      setAvailableDevelopers(allDevelopers);
+
+      // Content Writers
+      const contentWriters = normalizeMemberList(assignedTeam.contentWriters || []);
+      const contentWriterLegacy = assignedTeam.contentWriter;
+      const allContentWriters = contentWriters.length > 0 ? contentWriters : (contentWriterLegacy ? normalizeMemberList([contentWriterLegacy]) : []);
+      setAvailableContentWriters(allContentWriters);
+
+      // Graphic Designers
+      const graphicDesigners = normalizeMemberList(assignedTeam.graphicDesigners || []);
+      const graphicDesignerLegacy = assignedTeam.graphicDesigner;
+      const allGraphicDesigners = graphicDesigners.length > 0 ? graphicDesigners : (graphicDesignerLegacy ? normalizeMemberList([graphicDesignerLegacy]) : []);
+      setAvailableGraphicDesigners(allGraphicDesigners);
+
+      // Video Editors
+      const videoEditors = normalizeMemberList(assignedTeam.videoEditors || []);
+      const videoEditorLegacy = assignedTeam.videoEditor;
+      const allVideoEditors = videoEditors.length > 0 ? videoEditors : (videoEditorLegacy ? normalizeMemberList([videoEditorLegacy]) : []);
+      setAvailableVideoEditors(allVideoEditors);
+
+      // Testers
+      const testers = normalizeMemberList(assignedTeam.testers || []);
+      const testerLegacy = assignedTeam.tester;
+      const allTesters = testers.length > 0 ? testers : (testerLegacy ? normalizeMemberList([testerLegacy]) : []);
+      setAvailableTesters(allTesters);
 
       // Fetch brand settings
       try {
@@ -135,8 +184,14 @@ export default function LandingPageStrategyPage() {
           setCta(localDraft?.cta || lp.cta || '');
           setOffer(localDraft?.offer || lp.offer || '');
           setMessaging(localDraft?.messaging || lp.messaging || '');
-          setAssignedDesigner(localDraft?.assignedDesigner || lp.assignedDesigner?._id || lp.assignedDesigner?.toString() || '');
-          setAssignedDeveloper(localDraft?.assignedDeveloper || lp.assignedDeveloper?._id || lp.assignedDeveloper?.toString() || '');
+
+          // Load assigned team members (support both new array and legacy single field)
+          setAssignedDesigners(localDraft?.assignedDesigners || extractMemberIds(lp.assignedDesigners || []) || (lp.assignedDesigner ? [lp.assignedDesigner._id || lp.assignedDesigner] : []));
+          setAssignedDevelopers(localDraft?.assignedDevelopers || extractMemberIds(lp.assignedDevelopers || []) || (lp.assignedDeveloper ? [lp.assignedDeveloper._id || lp.assignedDeveloper] : []));
+          setAssignedContentWriters(localDraft?.assignedContentWriters || extractMemberIds(lp.assignedContentWriters || []));
+          setAssignedGraphicDesigners(localDraft?.assignedGraphicDesigners || extractMemberIds(lp.assignedGraphicDesigners || []));
+          setAssignedVideoEditors(localDraft?.assignedVideoEditors || extractMemberIds(lp.assignedVideoEditors || []));
+          setAssignedTesters(localDraft?.assignedTesters || extractMemberIds(lp.assignedTesters || []));
 
           // Show notification if local draft exists
           if (localDraft && localDraft._isLocalDraft) {
@@ -156,25 +211,13 @@ export default function LandingPageStrategyPage() {
         setCta(localDraft.cta || '');
         setOffer(localDraft.offer || '');
         setMessaging(localDraft.messaging || '');
-        setAssignedDesigner(localDraft.assignedDesigner || '');
-        setAssignedDeveloper(localDraft.assignedDeveloper || '');
+        setAssignedDesigners(localDraft.assignedDesigners || []);
+        setAssignedDevelopers(localDraft.assignedDevelopers || []);
+        setAssignedContentWriters(localDraft.assignedContentWriters || []);
+        setAssignedGraphicDesigners(localDraft.assignedGraphicDesigners || []);
+        setAssignedVideoEditors(localDraft.assignedVideoEditors || []);
+        setAssignedTesters(localDraft.assignedTesters || []);
         toast.info('Your previously saved draft has been restored. Review and save to keep your changes.');
-
-        // Pre-select if only one designer/developer available
-        if (allDesigners.length === 1 && !localDraft.assignedDesigner) {
-          setAssignedDesigner((allDesigners[0]._id || allDesigners[0])?.toString());
-        }
-        if (allDevelopers.length === 1 && !localDraft.assignedDeveloper) {
-          setAssignedDeveloper((allDevelopers[0]._id || allDevelopers[0])?.toString());
-        }
-      } else {
-        // For new landing page, pre-select if only one designer/developer available
-        if (allDesigners.length === 1) {
-          setAssignedDesigner((allDesigners[0]._id || allDesigners[0])?.toString());
-        }
-        if (allDevelopers.length === 1) {
-          setAssignedDeveloper((allDevelopers[0]._id || allDevelopers[0])?.toString());
-        }
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -203,8 +246,16 @@ export default function LandingPageStrategyPage() {
         cta,
         offer,
         messaging,
-        assignedDesigner,
-        assignedDeveloper,
+        // New array fields for multi-select
+        assignedDesigners,
+        assignedDevelopers,
+        assignedContentWriters,
+        assignedGraphicDesigners,
+        assignedVideoEditors,
+        assignedTesters,
+        // Legacy single fields (use first element for backward compatibility)
+        assignedDesigner: assignedDesigners[0] || null,
+        assignedDeveloper: assignedDevelopers[0] || null,
       };
 
       if (landingPageId) {
@@ -242,8 +293,12 @@ export default function LandingPageStrategyPage() {
         cta,
         offer,
         messaging,
-        assignedDesigner,
-        assignedDeveloper,
+        assignedDesigners,
+        assignedDevelopers,
+        assignedContentWriters,
+        assignedGraphicDesigners,
+        assignedVideoEditors,
+        assignedTesters,
       };
 
       // Save to localStorage before navigating back
@@ -278,8 +333,15 @@ export default function LandingPageStrategyPage() {
         cta,
         offer,
         messaging,
-        assignedDesigner,
-        assignedDeveloper,
+        assignedDesigners,
+        assignedDevelopers,
+        assignedContentWriters,
+        assignedGraphicDesigners,
+        assignedVideoEditors,
+        assignedTesters,
+        // Legacy single fields
+        assignedDesigner: assignedDesigners[0] || null,
+        assignedDeveloper: assignedDevelopers[0] || null,
       };
 
       if (landingPageId) {
@@ -340,7 +402,7 @@ export default function LandingPageStrategyPage() {
 
       {/* Progress */}
       <Card>
-        <CardBody className="p-4">
+        <CardBody className="p-3 sm:p-4">
           <StageProgressTracker stages={project?.stages} currentStage={project?.currentStage} />
         </CardBody>
       </Card>
@@ -429,62 +491,300 @@ export default function LandingPageStrategyPage() {
             <Users className="w-5 h-5 text-primary-500" />
             Team Assignment
           </h2>
-          <p className="text-sm text-gray-500">Assign team members for this landing page</p>
+          <p className="text-sm text-gray-500">Assign team members for this landing page. You can select multiple members for each role.</p>
         </CardHeader>
-        <CardBody className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                <Palette className="w-4 h-4 text-purple-500" />
-                UI/UX Designer *
-              </label>
-              <select
-                value={assignedDesigner}
-                onChange={(e) => setAssignedDesigner(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                disabled={!canEdit}
-              >
-                <option value="">Select Designer...</option>
-                {designers.map(d => (
-                  <option key={d._id || d} value={(d._id || d).toString()}>
-                    {d.name || 'Unknown'}
-                  </option>
-                ))}
-              </select>
-              {designers.length === 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  No UI/UX Designers assigned yet. You can assign them later from the team settings.
+        <CardBody className="space-y-6">
+          {/* UI/UX Designers */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <Palette className="w-4 h-4 text-purple-500" />
+              UI/UX Designers
+            </label>
+            <div className="space-y-2">
+              {availableDesigners.length === 0 ? (
+                <p className="text-sm text-gray-500 italic">
+                  No UI/UX Designers assigned to this project. Contact admin to add team members.
                 </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {availableDesigners.map(designer => {
+                    const isSelected = assignedDesigners.includes(designer._id);
+                    return (
+                      <button
+                        key={designer._id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setAssignedDesigners(assignedDesigners.filter(id => id !== designer._id));
+                          } else {
+                            setAssignedDesigners([...assignedDesigners, designer._id]);
+                          }
+                        }}
+                        disabled={!canEdit}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all ${
+                          isSelected
+                            ? 'bg-purple-50 border-purple-300 text-purple-700'
+                            : 'bg-white border-gray-200 text-gray-600 hover:border-purple-200 hover:bg-purple-25'
+                        } ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-purple-500 border-purple-500' : 'border-gray-300'}`}>
+                          {isSelected && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <span>{designer.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
-            </div>
-            <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                <Code className="w-4 h-4 text-green-500" />
-                Developer *
-              </label>
-              <select
-                value={assignedDeveloper}
-                onChange={(e) => setAssignedDeveloper(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                disabled={!canEdit}
-              >
-                <option value="">Select Developer...</option>
-                {developers.map(d => (
-                  <option key={d._id || d} value={(d._id || d).toString()}>
-                    {d.name || 'Unknown'}
-                  </option>
-                ))}
-              </select>
-              {developers.length === 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  No Developers assigned yet. You can assign them later from the team settings.
-                </p>
+              {assignedDesigners.length > 0 && (
+                <p className="text-xs text-gray-500">{assignedDesigners.length} designer{assignedDesigners.length !== 1 ? 's' : ''} selected</p>
               )}
             </div>
           </div>
-          <p className="text-xs text-gray-500">
-            Each landing page needs one UI/UX Designer for design and one Developer for implementation.
-            These assignments will be used when generating tasks.
+
+          {/* Developers */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <Code className="w-4 h-4 text-green-500" />
+              Developers
+            </label>
+            <div className="space-y-2">
+              {availableDevelopers.length === 0 ? (
+                <p className="text-sm text-gray-500 italic">
+                  No Developers assigned to this project. Contact admin to add team members.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {availableDevelopers.map(developer => {
+                    const isSelected = assignedDevelopers.includes(developer._id);
+                    return (
+                      <button
+                        key={developer._id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setAssignedDevelopers(assignedDevelopers.filter(id => id !== developer._id));
+                          } else {
+                            setAssignedDevelopers([...assignedDevelopers, developer._id]);
+                          }
+                        }}
+                        disabled={!canEdit}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all ${
+                          isSelected
+                            ? 'bg-green-50 border-green-300 text-green-700'
+                            : 'bg-white border-gray-200 text-gray-600 hover:border-green-200 hover:bg-green-25'
+                        } ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}>
+                          {isSelected && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <span>{developer.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {assignedDevelopers.length > 0 && (
+                <p className="text-xs text-gray-500">{assignedDevelopers.length} developer{assignedDevelopers.length !== 1 ? 's' : ''} selected</p>
+              )}
+            </div>
+          </div>
+
+          {/* Content Writers */}
+          {/* <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <FileText className="w-4 h-4 text-blue-500" />
+              Content Planners
+            </label>
+            <div className="space-y-2">
+              {availableContentWriters.length === 0 ? (
+                <p className="text-sm text-gray-500 italic">
+                  No Content Planners assigned to this project. Contact admin to add team members.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {availableContentWriters.map(writer => {
+                    const isSelected = assignedContentWriters.includes(writer._id);
+                    return (
+                      <button
+                        key={writer._id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setAssignedContentWriters(assignedContentWriters.filter(id => id !== writer._id));
+                          } else {
+                            setAssignedContentWriters([...assignedContentWriters, writer._id]);
+                          }
+                        }}
+                        disabled={!canEdit}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all ${
+                          isSelected
+                            ? 'bg-blue-50 border-blue-300 text-blue-700'
+                            : 'bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-25'
+                        } ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>
+                          {isSelected && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <span>{writer.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {assignedContentWriters.length > 0 && (
+                <p className="text-xs text-gray-500">{assignedContentWriters.length} content planner{assignedContentWriters.length !== 1 ? 's' : ''} selected</p>
+              )}
+            </div>
+          </div> */}
+
+          {/* Graphic Designers */}
+          {/* <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <Palette className="w-4 h-4 text-pink-500" />
+              Graphic Designers
+            </label>
+            <div className="space-y-2">
+              {availableGraphicDesigners.length === 0 ? (
+                <p className="text-sm text-gray-500 italic">
+                  No Graphic Designers assigned to this project. Contact admin to add team members.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {availableGraphicDesigners.map(designer => {
+                    const isSelected = assignedGraphicDesigners.includes(designer._id);
+                    return (
+                      <button
+                        key={designer._id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setAssignedGraphicDesigners(assignedGraphicDesigners.filter(id => id !== designer._id));
+                          } else {
+                            setAssignedGraphicDesigners([...assignedGraphicDesigners, designer._id]);
+                          }
+                        }}
+                        disabled={!canEdit}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all ${
+                          isSelected
+                            ? 'bg-pink-50 border-pink-300 text-pink-700'
+                            : 'bg-white border-gray-200 text-gray-600 hover:border-pink-200 hover:bg-pink-25'
+                        } ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-pink-500 border-pink-500' : 'border-gray-300'}`}>
+                          {isSelected && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <span>{designer.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {assignedGraphicDesigners.length > 0 && (
+                <p className="text-xs text-gray-500">{assignedGraphicDesigners.length} graphic designer{assignedGraphicDesigners.length !== 1 ? 's' : ''} selected</p>
+              )}
+            </div>
+          </div> */}
+
+          {/* Video Editors */}
+          {/* <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <Users className="w-4 h-4 text-cyan-500" />
+              Video Editors
+            </label>
+            <div className="space-y-2">
+              {availableVideoEditors.length === 0 ? (
+                <p className="text-sm text-gray-500 italic">
+                  No Video Editors assigned to this project. Contact admin to add team members.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {availableVideoEditors.map(editor => {
+                    const isSelected = assignedVideoEditors.includes(editor._id);
+                    return (
+                      <button
+                        key={editor._id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setAssignedVideoEditors(assignedVideoEditors.filter(id => id !== editor._id));
+                          } else {
+                            setAssignedVideoEditors([...assignedVideoEditors, editor._id]);
+                          }
+                        }}
+                        disabled={!canEdit}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all ${
+                          isSelected
+                            ? 'bg-cyan-50 border-cyan-300 text-cyan-700'
+                            : 'bg-white border-gray-200 text-gray-600 hover:border-cyan-200 hover:bg-cyan-25'
+                        } ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-cyan-500 border-cyan-500' : 'border-gray-300'}`}>
+                          {isSelected && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <span>{editor.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {assignedVideoEditors.length > 0 && (
+                <p className="text-xs text-gray-500">{assignedVideoEditors.length} video editor{assignedVideoEditors.length !== 1 ? 's' : ''} selected</p>
+              )}
+            </div>
+          </div> */}
+
+          {/* Testers */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <CheckCircle className="w-4 h-4 text-orange-500" />
+              Testers
+            </label>
+            <div className="space-y-2">
+              {availableTesters.length === 0 ? (
+                <p className="text-sm text-gray-500 italic">
+                  No Testers assigned to this project. Contact admin to add team members.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {availableTesters.map(tester => {
+                    const isSelected = assignedTesters.includes(tester._id);
+                    return (
+                      <button
+                        key={tester._id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setAssignedTesters(assignedTesters.filter(id => id !== tester._id));
+                          } else {
+                            setAssignedTesters([...assignedTesters, tester._id]);
+                          }
+                        }}
+                        disabled={!canEdit}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all ${
+                          isSelected
+                            ? 'bg-orange-50 border-orange-300 text-orange-700'
+                            : 'bg-white border-gray-200 text-gray-600 hover:border-orange-200 hover:bg-orange-25'
+                        } ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-orange-500 border-orange-500' : 'border-gray-300'}`}>
+                          {isSelected && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <span>{tester.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {assignedTesters.length > 0 && (
+                <p className="text-xs text-gray-500">{assignedTesters.length} tester{assignedTesters.length !== 1 ? 's' : ''} selected</p>
+              )}
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
+            <strong>Note:</strong> Select multiple team members for each role. Tasks will be assigned to all selected members.
+            If no members are selected for a role, the task will be created without assignment and can be assigned later.
           </p>
         </CardBody>
       </Card>

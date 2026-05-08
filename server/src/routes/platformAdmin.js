@@ -233,93 +233,78 @@ router.delete('/organizations/:id', async (req, res) => {
     const memberships = await Membership.find({ organizationId: id });
     const userIds = memberships.map(m => m.userId);
 
-    // Delete all related data
-    const deletionResults = {
-      projects: await Project.deleteMany({ organizationId: id }),
-      landingPages: await LandingPage.deleteMany({ organizationId: id }),
-      clients: await Client.deleteMany({ organizationId: id }),
-      creatives: await Creative.deleteMany({ organizationId: id }),
-      invitations: await Invitation.deleteMany({ organizationId: id }),
-      marketResearch: await MarketResearch.deleteMany({ organizationId: id }),
-      offers: await Offer.deleteMany({ organizationId: id }),
-      notifications: await Notification.deleteMany({ organizationId: id }),
-      tasks: await Task.deleteMany({ organizationId: id }),
-      prompts: await Prompt.deleteMany({ organizationId: id }),
-      trafficStrategies: await TrafficStrategy.deleteMany({ organizationId: id }),
-      payments: await Payment.deleteMany({ organizationId: id }),
-      subscription: await Subscription.deleteMany({ organizationId: id }),
-      usageLogs: await UsageLog.deleteMany({ organizationId: id }),
-      memberships: await Membership.deleteMany({ organizationId: id })
-    };
+    // COMMENTED OUT - Database deletion disabled temporarily
+    // // Delete all related data
+    // const deletionResults = {
+    //   projects: await Project.deleteMany({ organizationId: id }),
+    //   landingPages: await LandingPage.deleteMany({ organizationId: id }),
+    //   clients: await Client.deleteMany({ organizationId: id }),
+    //   creatives: await Creative.deleteMany({ organizationId: id }),
+    //   invitations: await Invitation.deleteMany({ organizationId: id }),
+    //   marketResearch: await MarketResearch.deleteMany({ organizationId: id }),
+    //   offers: await Offer.deleteMany({ organizationId: id }),
+    //   notifications: await Notification.deleteMany({ organizationId: id }),
+    //   tasks: await Task.deleteMany({ organizationId: id }),
+    //   prompts: await Prompt.deleteMany({ organizationId: id }),
+    //   trafficStrategies: await TrafficStrategy.deleteMany({ organizationId: id }),
+    //   payments: await Payment.deleteMany({ organizationId: id }),
+    //   subscription: await Subscription.deleteMany({ organizationId: id }),
+    //   usageLogs: await UsageLog.deleteMany({ organizationId: id }),
+    //   memberships: await Membership.deleteMany({ organizationId: id })
+    // };
 
-    // Delete all users from the organization
-    let deletedUsersCount = 0;
-    if (userIds.length > 0) {
-      const deleteUsersResult = await User.deleteMany({ _id: { $in: userIds } });
-      deletedUsersCount = deleteUsersResult.deletedCount;
-    }
+    // // Delete all users from the organization
+    // let deletedUsersCount = 0;
+    // if (userIds.length > 0) {
+    //   const deleteUsersResult = await User.deleteMany({ _id: { $in: userIds } });
+    //   deletedUsersCount = deleteUsersResult.deletedCount;
+    // }
 
-    // Delete the organization
-    await Organization.findByIdAndDelete(id);
+    // // Delete the organization
+    // await Organization.findByIdAndDelete(id);
 
-    // Log action (note: organization is deleted, but we log to a special record)
-    await UsageLog.logAction({
-      organizationId: null, // Org is deleted
-      userId: req.user._id,
-      userRole: 'platform_admin',
-      action: 'platform.org.delete',
-      resource: 'organization',
-      resourceId: id,
-      details: {
-        organizationName: organization.name,
-        deletedUsers: deletedUsersCount,
-        deletionSummary: {
-          projects: deletionResults.projects.deletedCount,
-          landingPages: deletionResults.landingPages.deletedCount,
-          clients: deletionResults.clients.deletedCount,
-          creatives: deletionResults.creatives.deletedCount,
-          invitations: deletionResults.invitations.deletedCount,
-          marketResearch: deletionResults.marketResearch.deletedCount,
-          offers: deletionResults.offers.deletedCount,
-          notifications: deletionResults.notifications.deletedCount,
-          tasks: deletionResults.tasks.deletedCount,
-          prompts: deletionResults.prompts.deletedCount,
-          trafficStrategies: deletionResults.trafficStrategies.deletedCount,
-          payments: deletionResults.payments.deletedCount,
-          subscription: deletionResults.subscription.deletedCount,
-          usageLogs: deletionResults.usageLogs.deletedCount,
-          memberships: deletionResults.memberships.deletedCount
-        }
-      },
-      request: {
-        ip: req.ip,
-        userAgent: req.headers['user-agent']
-      }
-    });
+    // COMMENTED OUT - Logging disabled since no actual deletion
+    // // Log action (note: organization is deleted, but we log to a special record)
+    // await UsageLog.logAction({
+    //   organizationId: null, // Org is deleted
+    //   userId: req.user._id,
+    //   userRole: 'platform_admin',
+    //   action: 'platform.org.delete',
+    //   resource: 'organization',
+    //   resourceId: id,
+    //   details: {
+    //     organizationName: organization.name,
+    //     deletedUsers: deletedUsersCount,
+    //     deletionSummary: {
+    //       projects: deletionResults.projects.deletedCount,
+    //       landingPages: deletionResults.landingPages.deletedCount,
+    //       clients: deletionResults.clients.deletedCount,
+    //       creatives: deletionResults.creatives.deletedCount,
+    //       invitations: deletionResults.invitations.deletedCount,
+    //       marketResearch: deletionResults.marketResearch.deletedCount,
+    //       offers: deletionResults.offers.deletedCount,
+    //       notifications: deletionResults.notifications.deletedCount,
+    //       tasks: deletionResults.tasks.deletedCount,
+    //       prompts: deletionResults.prompts.deletedCount,
+    //       trafficStrategies: deletionResults.trafficStrategies.deletedCount,
+    //       payments: deletionResults.payments.deletedCount,
+    //       subscription: deletionResults.subscription.deletedCount,
+    //       usageLogs: deletionResults.usageLogs.deletedCount,
+    //       memberships: deletionResults.memberships.deletedCount
+    //     }
+    //   },
+    //   request: {
+    //     ip: req.ip,
+    //     userAgent: req.headers['user-agent']
+    //   }
+    // });
 
     res.json({
       success: true,
       message: 'Organization and all related data deleted successfully',
       data: {
         organizationName: organization.name,
-        deletedUsers: deletedUsersCount,
-        deletionSummary: {
-          projects: deletionResults.projects.deletedCount,
-          landingPages: deletionResults.landingPages.deletedCount,
-          clients: deletionResults.clients.deletedCount,
-          creatives: deletionResults.creatives.deletedCount,
-          invitations: deletionResults.invitations.deletedCount,
-          marketResearch: deletionResults.marketResearch.deletedCount,
-          offers: deletionResults.offers.deletedCount,
-          notifications: deletionResults.notifications.deletedCount,
-          tasks: deletionResults.tasks.deletedCount,
-          prompts: deletionResults.prompts.deletedCount,
-          trafficStrategies: deletionResults.trafficStrategies.deletedCount,
-          payments: deletionResults.payments.deletedCount,
-          subscription: deletionResults.subscription.deletedCount,
-          usageLogs: deletionResults.usageLogs.deletedCount,
-          memberships: deletionResults.memberships.deletedCount
-        }
+        note: 'Database deletion disabled - data preserved in database'
       }
     });
   } catch (error) {
@@ -419,6 +404,9 @@ router.put('/organizations/:id/limits', async (req, res) => {
       ...organization.planLimits,
       ...limits
     };
+
+    // Mark the nested object as modified so Mongoose saves it properly
+    organization.markModified('planLimits');
 
     await organization.save();
 

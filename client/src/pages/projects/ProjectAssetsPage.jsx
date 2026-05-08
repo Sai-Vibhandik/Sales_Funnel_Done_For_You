@@ -9,6 +9,21 @@ import {
   Palette, Film, FileCheck
 } from 'lucide-react';
 
+// Utility function to ensure URLs have proper protocol
+const normalizeUrl = (url) => {
+  if (!url) return url;
+  // If already has protocol, return as-is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  // If it looks like a URL (has a dot or starts with www), add https://
+  if (url.includes('.') || url.startsWith('www.')) {
+    return `https://${url}`;
+  }
+  // Otherwise return as-is (could be a relative path or invalid)
+  return url;
+};
+
 const TASK_TYPE_CONFIG = {
   graphic_design: { label: 'Graphic Design', icon: Palette, color: 'bg-pink-100 text-pink-800' },
   video_editing: { label: 'Video Editing', icon: Film, color: 'bg-indigo-100 text-indigo-800' },
@@ -115,7 +130,7 @@ export default function ProjectAssetsPage() {
           {/* Design Link */}
           {task.designLink && (
             <a
-              href={task.designLink}
+              href={normalizeUrl(task.designLink)}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 p-2 bg-blue-50 rounded text-sm text-blue-600 hover:bg-blue-100"
@@ -143,7 +158,7 @@ export default function ProjectAssetsPage() {
           {/* Creative Link */}
           {task.creativeLink && (
             <a
-              href={task.creativeLink}
+              href={normalizeUrl(task.creativeLink)}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 p-2 bg-blue-50 rounded text-sm text-blue-600 hover:bg-blue-100"
@@ -157,7 +172,7 @@ export default function ProjectAssetsPage() {
           {/* Implementation URL */}
           {task.implementationUrl && (
             <a
-              href={task.implementationUrl}
+              href={normalizeUrl(task.implementationUrl)}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 p-2 bg-green-50 rounded text-sm text-green-600 hover:bg-green-100"

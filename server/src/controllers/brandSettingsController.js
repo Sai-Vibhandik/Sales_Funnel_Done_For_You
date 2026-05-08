@@ -1,6 +1,18 @@
 const BrandSettings = require('../models/BrandSettings');
 const Project = require('../models/Project');
 const cloudinary = require('cloudinary').v2;
+const path = require('path');
+const fs = require('fs');
+
+// Helper to check if Cloudinary is configured
+const isCloudinaryConfigured = () => {
+  return process.env.CLOUDINARY_CLOUD_NAME &&
+         process.env.CLOUDINARY_API_KEY &&
+         process.env.CLOUDINARY_API_SECRET &&
+         process.env.CLOUDINARY_CLOUD_NAME !== 'your_cloud_name' &&
+         process.env.CLOUDINARY_API_KEY !== 'your_api_key' &&
+         process.env.CLOUDINARY_API_SECRET !== 'your_api_secret';
+};
 
 // @desc    Get brand settings for a project
 // @route   GET /api/brand-settings/:projectId
@@ -133,6 +145,10 @@ exports.uploadBrandManual = async (req, res, next) => {
     });
 
     if (!project) {
+      // Clean up uploaded file
+      if (req.file.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(404).json({
         success: false,
         message: 'Project not found'
@@ -150,17 +166,31 @@ exports.uploadBrandManual = async (req, res, next) => {
       });
     }
 
-    // Upload to Cloudinary
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      folder: `brand-manuals/${projectId}`,
-      resource_type: 'auto'
-    });
+    // Delete old brand manual file if exists (local storage)
+    if (brandSettings.brandManual?.publicId) {
+      const oldFilePath = brandSettings.brandManual.publicId;
+      // Check if it's a local file (not a Cloudinary public_id which contains '/')
+      if (!oldFilePath.includes('/')) {
+        const fullOldPath = path.join(__dirname, '../../uploads/brand-manuals', oldFilePath);
+        if (fs.existsSync(fullOldPath)) {
+          fs.unlinkSync(fullOldPath);
+        }
+      }
+    }
+
+    // Multer already saved the file to uploads/brand-manuals/
+    // Get the filename from the path
+    const fileName = path.basename(req.file.path);
+
+    // Construct URL for serving the file
+    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const filePath = `${baseUrl}/api/brand-settings/${projectId}/manual/file`;
 
     // Update brand manual info
     brandSettings.brandManual = {
       fileName: req.file.originalname,
-      filePath: result.secure_url,
-      publicId: result.public_id,
+      filePath: filePath,
+      publicId: fileName, // Store filename as publicId for local files
       uploadedAt: new Date()
     };
     brandSettings.updatedBy = req.user._id;
@@ -173,6 +203,245 @@ exports.uploadBrandManual = async (req, res, next) => {
       message: 'Brand manual uploaded successfully'
     });
   } catch (error) {
+    // Clean up uploaded file if error
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    next(error);
+  }
+};
+
+// @desc    Serve brand manual file
+// @route   GET /api/brand-settings/:projectId/manual/file
+// @access  Public (for viewing/downloading brand manuals)
+exports.serveBrandManual = async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+
+    const brandSettings = await BrandSettings.findOne({ projectId });
+
+    if (!brandSettings?.brandManual) {
+      return res.status(404).json({
+        success: false,
+        message: 'Brand manual not found'
+      });
+    }
+
+    const { publicId, fileName, filePath: storedFilePath } = brandSettings.brandManual;
+    const brandManualsDir = path.join(__dirname, '../../uploads/brand-manuals');
+
+    // Helper function to serve a local file
+    const serveLocalFile = (filePath, res, fileName) => {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${fileName || 'brand-manual.pdf'}"`);
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET');
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.on('error', (err) => {
+        console.error('Error streaming file:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ success: false, message: 'Error streaming file' });
+        }
+      });
+      return fileStream.pipe(res);
+    };
+
+    // Helper function to try finding local file by various patterns
+    const findLocalFile = () => {
+      // Check if publicId is already a local filename (no '/')
+      if (publicId && !publicId.includes('/')) {
+        const localPath = path.join(brandManualsDir, publicId);
+        if (fs.existsSync(localPath)) {
+          return localPath;
+        }
+      }
+
+      // Try to find a matching local file by projectId prefix
+      try {
+        const files = fs.readdirSync(brandManualsDir);
+        // Look for files that might match this project
+        const matchingFiles = files.filter(f => f.startsWith('manual-'));
+        // Return the most recent file for now (could be improved with project-specific matching)
+        if (matchingFiles.length > 0) {
+          // Sort by modification time, most recent first
+          const sortedFiles = matchingFiles.sort((a, b) => {
+            const statA = fs.statSync(path.join(brandManualsDir, a));
+            const statB = fs.statSync(path.join(brandManualsDir, b));
+            return statB.mtimeMs - statA.mtimeMs;
+          });
+          // Return the most recent as a fallback
+          return path.join(brandManualsDir, sortedFiles[0]);
+        }
+      } catch (e) {
+        console.error('Error reading brand-manuals directory:', e);
+      }
+
+      return null;
+    };
+
+    // Strategy 1: Check if publicId is a local filename
+    if (publicId && !publicId.includes('/')) {
+      const localFilePath = path.join(brandManualsDir, publicId);
+      if (fs.existsSync(localFilePath)) {
+        console.log('Serving brand manual from local storage:', publicId);
+        return serveLocalFile(localFilePath, res, fileName);
+      }
+    }
+
+    // Strategy 2: Check if filePath points to a local file path pattern
+    if (storedFilePath) {
+      // Check if it's a local file reference (e.g., contains /uploads/ or is a local path)
+      if (storedFilePath.includes('/uploads/')) {
+        const localPath = path.join(__dirname, '../../..', storedFilePath.replace(/^.*\/uploads\//, 'uploads/'));
+        if (fs.existsSync(localPath)) {
+          console.log('Serving brand manual from uploads path:', localPath);
+          return serveLocalFile(localPath, res, fileName);
+        }
+      }
+
+      // Check if it's stored as a relative path
+      const possiblePaths = [
+        path.join(__dirname, '../../uploads/brand-manuals', path.basename(storedFilePath)),
+        path.join(brandManualsDir, path.basename(storedFilePath))
+      ];
+
+      for (const possiblePath of possiblePaths) {
+        if (fs.existsSync(possiblePath)) {
+          console.log('Serving brand manual from derived path:', possiblePath);
+          return serveLocalFile(possiblePath, res, fileName);
+        }
+      }
+    }
+
+    // Strategy 3: Try to find any matching local file
+    const foundLocalFile = findLocalFile();
+    if (foundLocalFile) {
+      console.log('Serving brand manual from fallback local file:', path.basename(foundLocalFile));
+      // Update the database to use this local file for future requests
+      brandSettings.brandManual.publicId = path.basename(foundLocalFile);
+      brandSettings.brandManual.filePath = `${process.env.BASE_URL || `${req.protocol}://${req.get('host')}`}/api/brand-settings/${projectId}/manual/file`;
+      await brandSettings.save();
+      return serveLocalFile(foundLocalFile, res, fileName);
+    }
+
+    // Strategy 4: Try Cloudinary if configured
+    if (publicId && publicId.includes('/')) {
+      // Check if Cloudinary is configured
+      if (!isCloudinaryConfigured()) {
+        console.log('Cloudinary not configured, cannot download:', publicId);
+        return res.status(404).json({
+          success: false,
+          message: 'Brand manual file not found locally. Please re-upload the brand manual.'
+        });
+      }
+
+      console.log('Attempting to download brand manual from Cloudinary:', publicId);
+
+      // Generate signed URL for download
+      const signedUrl = cloudinary.url(publicId, {
+        sign_url: true,
+        secure: true,
+        resource_type: 'raw',
+        type: 'authenticated'
+      });
+
+      console.log('Signed URL generated');
+
+      // Download file from Cloudinary
+      const https = require('https');
+      const http = require('http');
+
+      const downloadFile = (url) => {
+        return new Promise((resolve, reject) => {
+          const protocol = url.startsWith('https') ? https : http;
+          const chunks = [];
+
+          protocol.get(url, (response) => {
+            if (response.statusCode === 301 || response.statusCode === 302) {
+              // Follow redirect
+              return downloadFile(response.headers.location).then(resolve).catch(reject);
+            }
+
+            if (response.statusCode !== 200) {
+              reject(new Error(`Failed to download: ${response.statusCode}`));
+              return;
+            }
+
+            response.on('data', (chunk) => chunks.push(chunk));
+            response.on('end', () => resolve(Buffer.concat(chunks)));
+            response.on('error', reject);
+          }).on('error', reject);
+        });
+      };
+
+      try {
+        const fileBuffer = await downloadFile(signedUrl);
+
+        // Save to local storage for future requests
+        if (!fs.existsSync(brandManualsDir)) {
+          fs.mkdirSync(brandManualsDir, { recursive: true });
+        }
+
+        const newLocalFileName = `migrated-${Date.now()}.pdf`;
+        const newLocalFilePath = path.join(brandManualsDir, newLocalFileName);
+        fs.writeFileSync(newLocalFilePath, fileBuffer);
+
+        // Update database to use local file
+        brandSettings.brandManual.publicId = newLocalFileName;
+        brandSettings.brandManual.filePath = `${process.env.BASE_URL || `${req.protocol}://${req.get('host')}`}/api/brand-settings/${projectId}/manual/file`;
+        await brandSettings.save();
+
+        console.log('Brand manual migrated to local storage');
+
+        return serveLocalFile(newLocalFilePath, res, fileName);
+      } catch (downloadError) {
+        console.error('Error downloading from Cloudinary:', downloadError);
+
+        // Try direct URL without signing
+        if (storedFilePath && storedFilePath.startsWith('http')) {
+          let directUrl = storedFilePath;
+          if (directUrl.includes('/image/upload/')) {
+            directUrl = directUrl.replace('/image/upload/', '/raw/upload/');
+          }
+          console.log('Trying direct URL:', directUrl);
+
+          try {
+            const fileBuffer = await downloadFile(directUrl);
+
+            // Save to local storage
+            if (!fs.existsSync(brandManualsDir)) {
+              fs.mkdirSync(brandManualsDir, { recursive: true });
+            }
+
+            const newLocalFileName = `migrated-${Date.now()}.pdf`;
+            const newLocalFilePath = path.join(brandManualsDir, newLocalFileName);
+            fs.writeFileSync(newLocalFilePath, fileBuffer);
+
+            // Update database
+            brandSettings.brandManual.publicId = newLocalFileName;
+            await brandSettings.save();
+
+            return serveLocalFile(newLocalFilePath, res, fileName);
+          } catch (directError) {
+            console.error('Direct URL also failed:', directError);
+          }
+        }
+
+        return res.status(404).json({
+          success: false,
+          message: 'Brand manual file could not be loaded from cloud storage. Please re-upload the brand manual.'
+        });
+      }
+    }
+
+    return res.status(404).json({
+      success: false,
+      message: 'Brand manual file not found. Please re-upload the brand manual.'
+    });
+  } catch (error) {
+    console.error('Serve brand manual error:', error);
     next(error);
   }
 };
@@ -185,7 +454,22 @@ exports.uploadLogo = async (req, res, next) => {
     const { projectId } = req.params;
     const { logoType } = req.body; // 'primary', 'secondary', 'favicon'
 
+    console.log('\n=== LOGO UPLOAD REQUEST ===');
+    console.log('Project ID:', projectId);
+    console.log('Organization ID:', req.organizationId);
+    console.log('User:', req.user?._id, req.user?.role);
+    console.log('File received:', req.file ? {
+      fieldname: req.file.fieldname,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      path: req.file.path
+    } : 'NO FILE');
+    console.log('Logo type:', logoType);
+    console.log('Body:', req.body);
+
     if (!req.file) {
+      console.log('ERROR: No file uploaded');
       return res.status(400).json({
         success: false,
         message: 'No file uploaded'
@@ -199,16 +483,24 @@ exports.uploadLogo = async (req, res, next) => {
     });
 
     if (!project) {
+      console.log('ERROR: Project not found for projectId:', projectId, 'organizationId:', req.organizationId);
+      // Clean up uploaded file
+      if (req.file.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(404).json({
         success: false,
         message: 'Project not found'
       });
     }
 
+    console.log('Project found:', project._id, project.projectName || project.businessName);
+
     // Find or create brand settings
     let brandSettings = await BrandSettings.findOne({ projectId });
 
     if (!brandSettings) {
+      console.log('Creating new brand settings for project:', projectId);
       brandSettings = new BrandSettings({
         organizationId: req.organizationId,
         projectId,
@@ -216,25 +508,103 @@ exports.uploadLogo = async (req, res, next) => {
       });
     }
 
-    // Upload to Cloudinary
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      folder: `brand-logos/${projectId}`,
-      resource_type: 'image'
-    });
+    // Normalize logo type - accept 'logo' as 'primary' for backward compatibility
+    const type = (logoType === 'logo' || !logoType) ? 'primary' : logoType;
+    console.log('Logo type to save:', type);
 
-    // Update logo based on type
-    const logoData = {
-      fileName: req.file.originalname,
-      filePath: result.secure_url,
-      publicId: result.public_id,
-      uploadedAt: new Date()
-    };
+    // Delete old logo if exists
+    if (brandSettings.logos && brandSettings.logos[type]?.publicId) {
+      const oldPublicId = brandSettings.logos[type].publicId;
+      console.log('Deleting old logo:', oldPublicId);
 
-    const type = logoType || 'primary';
+      // Check if it's a local file or Cloudinary file
+      if (oldPublicId && !oldPublicId.includes('/')) {
+        // Local file
+        const oldFilePath = path.join(__dirname, '../../uploads/brand-assets', oldPublicId);
+        if (fs.existsSync(oldFilePath)) {
+          fs.unlinkSync(oldFilePath);
+          console.log('Deleted local file:', oldFilePath);
+        }
+      } else if (oldPublicId && isCloudinaryConfigured()) {
+        // Cloudinary file
+        try {
+          await cloudinary.uploader.destroy(oldPublicId);
+          console.log('Deleted from Cloudinary:', oldPublicId);
+        } catch (cloudinaryError) {
+          console.error('Error deleting old logo from Cloudinary:', cloudinaryError.message);
+        }
+      }
+    }
+
+    let logoData;
+
+    // Try Cloudinary first if configured
+    if (isCloudinaryConfigured()) {
+      console.log('Cloudinary configured, attempting upload...');
+      try {
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: `brand-logos/${projectId}`,
+          resource_type: 'image'
+        });
+
+        console.log('Cloudinary upload successful:', result.public_id);
+
+        logoData = {
+          fileName: req.file.originalname,
+          filePath: result.secure_url,
+          publicId: result.public_id,
+          uploadedAt: new Date()
+        };
+
+        // Clean up local file after successful Cloudinary upload
+        if (fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+          console.log('Cleaned up local file:', req.file.path);
+        }
+      } catch (cloudinaryError) {
+        console.error('Cloudinary upload failed:', cloudinaryError.message);
+        console.log('Falling back to local storage...');
+        // Fall back to local storage
+      }
+    } else {
+      console.log('Cloudinary not configured, using local storage');
+    }
+
+    // Use local storage if Cloudinary is not configured or upload failed
+    if (!logoData) {
+      // File is already saved by multer to uploads/brand-assets/
+      const fileName = path.basename(req.file.path);
+      const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+      const filePath = `${baseUrl}/uploads/brand-assets/${fileName}`;
+
+      console.log('Using local storage:', {
+        fileName,
+        filePath,
+        localPath: req.file.path
+      });
+
+      logoData = {
+        fileName: req.file.originalname,
+        filePath: filePath,
+        publicId: fileName, // Store filename as publicId for local files
+        uploadedAt: new Date()
+      };
+    }
+
+    // Initialize logos object if not exists
+    if (!brandSettings.logos) {
+      brandSettings.logos = {};
+    }
+
     brandSettings.logos[type] = logoData;
     brandSettings.updatedBy = req.user._id;
 
     await brandSettings.save();
+
+    console.log('=== LOGO UPLOAD SUCCESS ===');
+    console.log('Logo saved:', logoData);
+    console.log('Brand settings ID:', brandSettings._id);
+    console.log('Logos in DB:', brandSettings.logos);
 
     res.status(200).json({
       success: true,
@@ -242,6 +612,13 @@ exports.uploadLogo = async (req, res, next) => {
       message: `${type} logo uploaded successfully`
     });
   } catch (error) {
+    console.error('=== LOGO UPLOAD ERROR ===');
+    console.error('Error:', error.message);
+    console.error('Stack:', error.stack);
+    // Clean up uploaded file if error
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
     next(error);
   }
 };
@@ -503,8 +880,23 @@ exports.deleteBrandManual = async (req, res, next) => {
       });
     }
 
-    // Delete from Cloudinary
-    await cloudinary.uploader.destroy(brandSettings.brandManual.publicId);
+    // Check if it's a local file or Cloudinary file
+    const publicId = brandSettings.brandManual.publicId;
+    if (publicId && !publicId.includes('/')) {
+      // Local file - delete from filesystem
+      const filePath = path.join(__dirname, '../../uploads/brand-manuals', publicId);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } else if (publicId) {
+      // Cloudinary file - delete from Cloudinary
+      try {
+        await cloudinary.uploader.destroy(publicId);
+      } catch (cloudinaryError) {
+        console.error('Error deleting from Cloudinary:', cloudinaryError);
+        // Continue even if Cloudinary delete fails
+      }
+    }
 
     // Clear brand manual
     brandSettings.brandManual = {};
@@ -528,20 +920,39 @@ exports.deleteLogo = async (req, res, next) => {
   try {
     const { projectId, logoType } = req.params;
 
+    // Normalize logo type - accept 'logo' as 'primary' for backward compatibility
+    const type = (logoType === 'logo') ? 'primary' : logoType;
+
     const brandSettings = await BrandSettings.findOne({ projectId });
 
-    if (!brandSettings || !brandSettings.logos[logoType]?.publicId) {
+    if (!brandSettings || !brandSettings.logos?.[type]?.publicId) {
       return res.status(404).json({
         success: false,
         message: 'Logo not found'
       });
     }
 
-    // Delete from Cloudinary
-    await cloudinary.uploader.destroy(brandSettings.logos[logoType].publicId);
+    const publicId = brandSettings.logos[type].publicId;
+
+    // Check if it's a local file or Cloudinary file
+    if (publicId && !publicId.includes('/')) {
+      // Local file - delete from filesystem
+      const filePath = path.join(__dirname, '../../uploads/brand-assets', publicId);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } else if (publicId && isCloudinaryConfigured()) {
+      // Cloudinary file - delete from Cloudinary
+      try {
+        await cloudinary.uploader.destroy(publicId);
+      } catch (cloudinaryError) {
+        console.error('Error deleting logo from Cloudinary:', cloudinaryError);
+        // Continue even if Cloudinary delete fails
+      }
+    }
 
     // Clear logo
-    brandSettings.logos[logoType] = {};
+    brandSettings.logos[type] = {};
     brandSettings.updatedBy = req.user._id;
 
     await brandSettings.save();

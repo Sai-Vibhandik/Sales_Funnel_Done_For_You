@@ -2,12 +2,12 @@ import { cn } from '@/lib/utils';
 import { Check, Lock } from 'lucide-react';
 
 const STAGES = [
-  { key: 'onboarding', name: 'Onboarding', icon: '📋' },
-  { key: 'marketResearch', name: 'Market Research', icon: '🔍' },
-  { key: 'offerEngineering', name: 'Offer Engineering', icon: '🎁' },
-  { key: 'trafficStrategy', name: 'Traffic Strategy', icon: '📈' },
-  { key: 'landingPage', name: 'Landing Page', icon: '📄' },
-  { key: 'creativeStrategy', name: 'Creative Strategy', icon: '💡' },
+  { key: 'onboarding', name: 'Onboarding', shortName: 'Onboard', icon: '📋' },
+  { key: 'marketResearch', name: 'Market Research', shortName: 'Research', icon: '🔍' },
+  { key: 'offerEngineering', name: 'Offer Engineering', shortName: 'Offer', icon: '🎁' },
+  { key: 'trafficStrategy', name: 'Traffic Strategy', shortName: 'Traffic', icon: '📈' },
+  { key: 'landingPage', name: 'Landing Page', shortName: 'Landing', icon: '📄' },
+  { key: 'creativeStrategy', name: 'Creative Strategy', shortName: 'Creative', icon: '💡' },
 ];
 
 export default function StageProgressTracker({ stages, currentStage }) {
@@ -38,61 +38,49 @@ export default function StageProgressTracker({ stages, currentStage }) {
   };
 
   return (
-    <div className="w-full overflow-x-auto">
-      <div className="flex items-start justify-between min-w-[700px]">
-        {STAGES.map((stage, index) => {
-          const status = getStageStatus(stage.key, index);
-          const isLast = index === STAGES.length - 1;
+    <div className="w-full">
+      {/* Mobile: Scrollable horizontal layout */}
+      <div className="overflow-x-auto overflow-y-hidden scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="flex items-start justify-between gap-1 sm:gap-2 min-w-[480px] sm:min-w-0 sm:w-full">
+          {STAGES.map((stage, index) => {
+            const status = getStageStatus(stage.key, index);
 
-          return (
-            <div key={stage.key} className="flex-1">
-              <div className="flex items-start">
+            return (
+              <div key={stage.key} className="flex-1 flex flex-col items-center">
                 {/* Stage circle */}
-                <div className="flex flex-col items-center">
-                  <div
-                    className={cn(
-                      'w-10 h-10 rounded-full flex items-center justify-center text-lg font-medium',
-                      'transition-all duration-300',
-                      status.isCompleted && 'bg-green-500 text-white',
-                      // status.isCurrent && 'bg-primary-600 text-white ring-4 ring-primary-100',
-                      status.isLocked && 'bg-gray-200 text-gray-400'
-                    )}
-                  >
-                    {status.isCompleted ? (
-                      <Check className="w-5 h-5" />
-                    ) : status.isLocked ? (
-                      <Lock className="w-4 h-4" />
-                    ) : (
-                      <span>{stage.icon}</span>
-                    )}
-                  </div>
-                  <span
-                    className={cn(
-                      'mt-2 text-xs font-medium text-center whitespace-nowrap',
-                      status.isCompleted && 'text-green-600',
-                      // status.isCurrent && 'text-primary-600',
-                      status.isLocked && 'text-gray-400'
-                    )}
-                  >
-                    {stage.name}
-                  </span>
+                <div
+                  className={cn(
+                    'w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm sm:text-base md:text-lg font-medium flex-shrink-0',
+                    'transition-all duration-300',
+                    status.isCompleted && 'bg-green-500 text-white',
+                    status.isLocked && 'bg-gray-200 text-gray-400',
+                    !status.isCompleted && !status.isLocked && !status.isCurrent && 'bg-primary-100 text-primary-600',
+                    status.isCurrent && 'bg-primary-500 text-white ring-2 ring-primary-200'
+                  )}
+                >
+                  {status.isCompleted ? (
+                    <Check className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5" />
+                  ) : status.isLocked ? (
+                    <Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
+                  ) : (
+                    <span>{stage.icon}</span>
+                  )}
                 </div>
-
-                {/* Connector line */}
-                {!isLast && (
-                  <div className="flex-1 h-0.5 mt-5 mx-2">
-                    <div
-                      className={cn(
-                        'h-full rounded-full transition-all duration-300',
-                        status.isCompleted ? 'bg-green-500' : 'bg-gray-200'
-                      )}
-                    />
-                  </div>
-                )}
+                <span
+                  className={cn(
+                    'mt-1 sm:mt-1.5 md:mt-2 text-[9px] sm:text-[10px] md:text-xs font-medium text-center leading-tight',
+                    status.isCompleted && 'text-green-600',
+                    status.isLocked && 'text-gray-400',
+                    !status.isCompleted && !status.isLocked && 'text-gray-700'
+                  )}
+                >
+                  <span className="sm:hidden">{stage.shortName}</span>
+                  <span className="hidden sm:inline">{stage.name}</span>
+                </span>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );

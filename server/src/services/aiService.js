@@ -3,6 +3,8 @@
  * Supports: OpenAI, Ollama, Gemini, Hypereal, DeepSeek (configurable via AI_PROVIDER env var)
  */
 
+const { replaceTemplatePlaceholders } = require('../utils/frameworkTemplates');
+
 const AI_PROVIDER = process.env.AI_PROVIDER || 'openai';
 
 // OpenAI Configuration
@@ -504,7 +506,10 @@ Generate the content brief now:`;
  * Build the content brief prompt with all context
  */
 function buildContentBriefPrompt(framework, frameworkTemplate, context) {
-  let prompt = `FRAMEWORK TEMPLATE:\n${frameworkTemplate}\n\n`;
+  // Replace placeholders in the template with context values
+  const processedTemplate = replaceTemplatePlaceholders(frameworkTemplate, context);
+
+  let prompt = `FRAMEWORK TEMPLATE:\n${processedTemplate}\n\n`;
 
   prompt += `PROJECT & TASK CONTEXT:\n`;
   prompt += `=====================\n\n`;

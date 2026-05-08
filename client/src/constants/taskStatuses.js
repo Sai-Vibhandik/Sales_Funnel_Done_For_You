@@ -110,10 +110,9 @@ export const SUBMITTED_STATUSES = [
 // Tasks approved by tester (awaiting marketer approval)
 export const APPROVED_STATUSES = [
   'approved_by_tester', // legacy
-  'content_approved', // legacy
-  'design_approved',
-  'development_approved',
-  'content_final_approved'
+  'content_approved',      // Content approved by tester, awaiting marketer
+  'design_approved',       // Design approved by tester, awaiting marketer
+  'development_approved'   // Development approved by tester, awaiting marketer
 ];
 
 // Tasks fully approved (completed)
@@ -187,6 +186,16 @@ export const STATUS_CONFIG = {
     group: 'content',
     description: 'Content submitted for tester review'
   },
+  content_approved: {
+    label: 'In Final Review',
+    color: 'purple',
+    bgColor: 'bg-purple-100',
+    textColor: 'text-purple-800',
+    chartColor: '#8B5CF6',
+    icon: CheckCircle,
+    group: 'content',
+    description: 'Tester approved, awaiting marketer review'
+  },
   content_final_approved: {
     label: 'Approved',
     color: 'green',
@@ -195,7 +204,7 @@ export const STATUS_CONFIG = {
     chartColor: '#10B981',
     icon: CheckCircle,
     group: 'content',
-    description: 'Content approved by tester, ready for design'
+    description: 'Content approved by marketer, ready for design'
   },
   content_rejected: {
     label: 'Revision Needed',
@@ -326,17 +335,6 @@ export const STATUS_CONFIG = {
     group: 'legacy',
     deprecated: true,
     description: 'Tester approved, awaiting marketer review (legacy status)'
-  },
-  content_approved: {
-    label: 'Approved',
-    color: 'purple',
-    bgColor: 'bg-purple-100',
-    textColor: 'text-purple-800',
-    chartColor: '#8B5CF6',
-    icon: CheckCircle,
-    group: 'legacy',
-    deprecated: true,
-    description: 'Content approved (legacy status)'
   }
 };
 
@@ -459,7 +457,8 @@ export function canBeReviewedByTester(status) {
  * @returns {boolean} True if task can be approved by marketer
  */
 export function canBeApprovedByMarketer(status) {
-  return status === 'design_approved' ||
+  return status === 'content_approved' ||
+         status === 'design_approved' ||
          status === 'development_approved' ||
          status === 'approved_by_tester'; // legacy
 }

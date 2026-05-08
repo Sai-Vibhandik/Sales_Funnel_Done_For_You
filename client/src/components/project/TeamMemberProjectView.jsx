@@ -263,7 +263,7 @@ export default function TeamMemberProjectView() {
                 size="sm"
                 onClick={() => navigate(`/dashboard/projects/${id}/strategy-summary`)}
               >
-                <Eye className="w-4 h-4 mr-2" />
+                <Eye className="w-4 h-4 mr-1" />
                 View Full Strategy
               </Button>
             </CardHeader>
@@ -871,7 +871,7 @@ export default function TeamMemberProjectView() {
                         )}
 
                         {/* Strategy Context Preview */}
-                        {task.strategyContext && (
+                        {/* {task.strategyContext && (
                           <div className="mt-3 p-3 bg-gray-50 rounded-lg">
                             <div className="grid grid-cols-2 gap-2 text-sm">
                               {task.strategyContext.platform && (
@@ -888,7 +888,7 @@ export default function TeamMemberProjectView() {
                               )}
                             </div>
                           </div>
-                        )}
+                        )} */}
                       </div>
 
                       <Button

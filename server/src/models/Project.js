@@ -251,16 +251,49 @@ const projectSchema = new mongoose.Schema({
       trim: true
     },
     // Team member assignments for this specific landing page
+    // Legacy single fields (kept for backward compatibility)
     assignedDesigner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      description: 'UI/UX Designer assigned to this landing page'
+      description: 'UI/UX Designer assigned to this landing page (legacy - use assignedDesigners)'
     },
     assignedDeveloper: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      description: 'Developer assigned to this landing page'
+      description: 'Developer assigned to this landing page (legacy - use assignedDevelopers)'
     },
+    // New array fields for multi-select support
+    assignedDesigners: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      description: 'UI/UX Designers assigned to this landing page'
+    }],
+    assignedDevelopers: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      description: 'Developers assigned to this landing page'
+    }],
+    assignedContentWriters: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      description: 'Content Planners assigned to this landing page'
+    }],
+    assignedGraphicDesigners: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      description: 'Graphic Designers assigned to this landing page'
+    }],
+    assignedVideoEditors: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      description: 'Video Editors assigned to this landing page'
+    }],
+    // Testers assigned to review this landing page - supports multiple testers
+    assignedTesters: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      description: 'Testers assigned to review this landing page'
+    }],
     createdAt: {
       type: Date,
       default: Date.now

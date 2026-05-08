@@ -104,7 +104,11 @@ export default function RejectionsPage() {
   const fetchUserHistory = async (userId) => {
     try {
       const res = await rejectionService.getUserRejectionHistory(userId);
-      setUserRejections(res.data);
+      setUserRejections({
+        rejections: res.data,
+        stats: res.stats,
+        pagination: res.pagination
+      });
       setSelectedUser(userId);
       setActiveTab('user-detail');
     } catch (error) {

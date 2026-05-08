@@ -652,10 +652,6 @@ export default function MarketResearchPage() {
               <span>View Only</span>
             </div>
           )}
-          <div className="text-sm text-gray-500">Progress</div>
-          <div className="text-2xl font-bold text-primary-600">
-            {isCompleted ? '100%' : `${progress}%`}
-          </div>
         </div>
       </div>
 
@@ -688,7 +684,7 @@ export default function MarketResearchPage() {
 
       {/* Progress */}
       <Card>
-        <CardBody className="p-4">
+        <CardBody className="p-3 sm:p-4">
           <StageProgressTracker stages={project?.stages} currentStage={project?.currentStage} />
         </CardBody>
       </Card>

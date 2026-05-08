@@ -34,7 +34,9 @@ export default function ProjectBrandSettingsPage() {
   };
 
   const handleSave = () => {
-    toast.success('Brand settings saved successfully');
+    // Navigate back to the previous page
+    // Note: BrandSettingsManager already shows success toast
+    navigate(-1);
   };
 
   if (loading) {

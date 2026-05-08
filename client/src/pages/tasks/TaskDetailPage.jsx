@@ -4,14 +4,30 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardBody, CardHeader, Button, Spinner, Badge, Textarea } from '@/components/ui';
 import { taskService, promptService, aiService, frameworkCategoryService } from '@/services/api';
+import TaskProgressTimeline from '@/components/tasks/TaskProgressTimeline';
 import {
   ClipboardList, Play, Send, CheckCircle, XCircle, Clock,
   FileText, ExternalLink, Upload, X, FileIcon, Video, Image,
   AlertCircle, ArrowLeft, Download, Eye, Link, MessageSquare, Layout, Code, Palette,
-  PenTool, Sparkles, Copy, ChevronRight, BookOpen
+  PenTool, Sparkles, Copy, ChevronRight, BookOpen, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { STATUS_CONFIG, getStatusConfig } from '@/constants/taskStatuses';
 import BrandSettingsView from '@/components/tasks/BrandSettingsView';
+
+// Utility function to ensure URLs have proper protocol
+const normalizeUrl = (url) => {
+  if (!url) return url;
+  // If already has protocol, return as-is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  // If it looks like a URL (has a dot or starts with www), add https://
+  if (url.includes('.') || url.startsWith('www.')) {
+    return `https://${url}`;
+  }
+  // Otherwise return as-is (could be a relative path or invalid)
+  return url;
+};
 
 const PLATFORM_LABELS = {
   facebook: 'Facebook',
@@ -58,6 +74,10 @@ export default function TaskDetailPage() {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
 
+  // ─── FIX: Use ref to track uploading state for immediate synchronous check
+  // This prevents multiple clicks before React state updates
+  const isUploadingRef = useRef(false);
+
   // Rejection reasons for dropdown
   const REJECTION_REASONS = [
     { value: 'quality', label: 'Quality issues' },
@@ -68,6 +88,9 @@ export default function TaskDetailPage() {
     { value: 'technical', label: 'Technical issues' },
     { value: 'other', label: 'Other' },
   ];
+
+  // Check if user is organization admin (view-only for tasks)
+  const isAdmin = user?.role === 'admin';
 
   // Prompts state
   const [prompts, setPrompts] = useState([]);
@@ -513,8 +536,12 @@ export default function TaskDetailPage() {
   };
 
   const handleSubmitForReview = async () => {
+    // Guard against concurrent uploads using both ref and state
+    if (uploading || isUploadingRef.current) return;
+
     try {
       setUploading(true);
+      isUploadingRef.current = true;
 
       // Build update data based on task type
       let updateData = { submittedAt: new Date() };
@@ -525,6 +552,7 @@ export default function TaskDetailPage() {
         if (!submissionForm.contentLink.trim()) {
           toast.error('Please provide a content link');
           setUploading(false);
+          isUploadingRef.current = false;
           return;
         }
 
@@ -556,6 +584,7 @@ export default function TaskDetailPage() {
             console.error('File upload error:', uploadError);
             toast.error(uploadError?.message || 'Failed to upload file');
             setUploading(false);
+            isUploadingRef.current = false;
             return;
           }
         }
@@ -566,6 +595,7 @@ export default function TaskDetailPage() {
         if (!submissionForm.designLink.trim()) {
           toast.error('Please provide a design link');
           setUploading(false);
+          isUploadingRef.current = false;
           return;
         }
 
@@ -597,6 +627,7 @@ export default function TaskDetailPage() {
             console.error('File upload error:', uploadError);
             toast.error(uploadError?.message || 'Failed to upload file');
             setUploading(false);
+            isUploadingRef.current = false;
             return;
           }
         }
@@ -607,6 +638,7 @@ export default function TaskDetailPage() {
         if (!submissionForm.implementationUrl.trim()) {
           toast.error('Please provide the landing page URL');
           setUploading(false);
+          isUploadingRef.current = false;
           return;
         }
 
@@ -621,6 +653,7 @@ export default function TaskDetailPage() {
         if (!submissionForm.creativeLink.trim()) {
           toast.error('Please provide a creative link');
           setUploading(false);
+          isUploadingRef.current = false;
           return;
         }
 
@@ -641,6 +674,7 @@ export default function TaskDetailPage() {
             console.error('File upload error:', uploadError);
             toast.error(uploadError?.message || 'Failed to upload file');
             setUploading(false);
+            isUploadingRef.current = false;
             return;
           }
         }
@@ -669,6 +703,7 @@ export default function TaskDetailPage() {
       toast.error(error?.message || 'Failed to submit task');
     } finally {
       setUploading(false);
+      isUploadingRef.current = false;
     }
   };
 
@@ -702,9 +737,9 @@ export default function TaskDetailPage() {
 
   const isAssignedUser = () => {
     // Check if the current user is assigned to this task
-    // Admins can also submit on behalf of users
+    // Organization admins are view-only and cannot submit/approve
     if (!user || !task) return false;
-    if (user.role === 'admin') return true;
+    if (user.role === 'admin') return false; // Admin is view-only
 
     // Check if user is assigned to the task
     const assignedToId = task.assignedTo?._id || task.assignedTo;
@@ -776,16 +811,18 @@ export default function TaskDetailPage() {
 
   const canTesterReview = () => {
     // Testers can review tasks in these statuses
+    // Organization admins are view-only and cannot review
     const reviewableStatuses = ['content_submitted', 'design_submitted', 'development_submitted', 'submitted'];
-    return user && (user.role === 'tester' || user.role === 'admin') &&
+    return user && user.role === 'tester' &&
            task && reviewableStatuses.includes(task.status);
   };
 
   const canMarketerApprove = () => {
     // Performance marketers can approve tasks in these statuses
+    // Organization admins are view-only and cannot approve
     // Note: content_final_approved goes directly to design, marketers don't approve content
     const approvableStatuses = ['design_approved', 'development_approved', 'approved_by_tester'];
-    return user && (user.role === 'performance_marketer' || user.role === 'admin') &&
+    return user && user.role === 'performance_marketer' &&
            task && approvableStatuses.includes(task.status);
   };
 
@@ -867,6 +904,18 @@ export default function TaskDetailPage() {
                     </p>
                   </div>
                 </div>
+
+                {/* Lead Capture Method - Only for landing page tasks */}
+                {(task.taskType === 'landing_page_design' || task.taskType === 'landing_page_development') && strategyContext.leadCaptureMethod && (
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Lead Capture Method
+                    </label>
+                    <p className="mt-1 text-gray-900 font-medium capitalize">
+                      {strategyContext.leadCaptureMethod.replace(/_/g, ' ')}
+                    </p>
+                  </div>
+                )}
 
                 {/* Platform */}
                 <div className="bg-gray-50 rounded-lg p-4">
@@ -1491,6 +1540,38 @@ Script: (for video) Opening hook..."
             </Card>
           )}
 
+          {/* Brand Settings - For Graphic Designers working on Image Creatives */}
+          {user?.role === 'graphic_designer' && task.taskType === 'graphic_design' && task.projectId && (
+            <Card>
+              <CardHeader className="bg-gradient-to-r from-pink-50 to-purple-50">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Palette className="w-5 h-5 text-pink-500" />
+                  Brand Guidelines
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Use these brand colors, typography, and logos for your image creatives
+                </p>
+              </CardHeader>
+              <CardBody className="p-6">
+                <BrandSettingsView
+                  projectId={task.projectId._id || task.projectId}
+                  taskId={task._id}
+                  onGeneratePrompt={(brandPrompt) => {
+                    // Append brand guidelines to AI brief if generated
+                    if (aiBrief) {
+                      const newBrief = aiBrief + '\n\n' + brandPrompt;
+                      setAiBrief(newBrief);
+                      toast.success('Brand guidelines added to your brief');
+                    } else {
+                      setAiBrief(brandPrompt);
+                      toast.success('Brand guidelines loaded');
+                    }
+                  }}
+                />
+              </CardBody>
+            </Card>
+          )}
+
           {/* AI Prompt (for other roles with pre-existing prompt) */}
           {task.aiPrompt && user?.role !== 'content_writer' && user?.role !== 'graphic_designer' && (
             // <Card>
@@ -1530,7 +1611,7 @@ Script: (for video) Opening hook..."
                         Creative Link
                       </h4>
                       <a
-                        href={task.creativeLink}
+                        href={normalizeUrl(task.creativeLink)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-pink-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -1602,7 +1683,7 @@ Script: (for video) Opening hook..."
                         Content Link
                       </h4>
                       <a
-                        href={task.contentLink}
+                        href={normalizeUrl(task.contentLink)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-green-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -1672,7 +1753,7 @@ Script: (for video) Opening hook..."
                         Content Link
                       </h4>
                       <a
-                        href={task.contentLink}
+                        href={normalizeUrl(task.contentLink)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-green-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -1770,7 +1851,7 @@ Script: (for video) Opening hook..."
                         Design Link
                       </h4>
                       <a
-                        href={task.designLink}
+                        href={normalizeUrl(task.designLink)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-purple-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -1815,6 +1896,90 @@ Script: (for video) Opening hook..."
             </Card>
           )}
 
+          {/* Brand Settings - For Developers working on Landing Page Development */}
+          {user?.role === 'developer' && task.taskType === 'landing_page_development' && task.projectId && (
+            <Card>
+              <CardHeader className="bg-gradient-to-r from-pink-50 to-purple-50">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Palette className="w-5 h-5 text-pink-500" />
+                  Brand Guidelines
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Use these brand colors, typography, and logos for your implementation
+                </p>
+              </CardHeader>
+              <CardBody className="p-6">
+                <BrandSettingsView
+                  projectId={task.projectId._id || task.projectId}
+                  taskId={task._id}
+                  editable={false}
+                  onGeneratePrompt={(brandPrompt) => {
+                    // Append brand guidelines to AI brief if generated
+                    if (aiBrief) {
+                      const newBrief = aiBrief + '\n\n' + brandPrompt;
+                      setAiBrief(newBrief);
+                      toast.success('Brand guidelines added to your brief');
+                    } else {
+                      setAiBrief(brandPrompt);
+                      toast.success('Brand guidelines loaded');
+                    }
+                  }}
+                />
+              </CardBody>
+            </Card>
+          )}
+
+          {/* Designer's Creative Brief - For Developers */}
+          {user?.role === 'developer' && task.taskType === 'landing_page_development' && task.designerPrompt && (
+            <Card>
+              <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-indigo-500" />
+                    Designer's Creative Brief
+                  </h2>
+                  <button
+                    onClick={() => copyToClipboard(task.designerPrompt)}
+                    className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copy Brief
+                  </button>
+                </div>
+                <p className="text-sm text-gray-500 mt-1">
+                  AI-generated brief used by the designer for this landing page design
+                </p>
+              </CardHeader>
+              <CardBody className="p-6">
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <pre className="whitespace-pre-wrap text-sm text-gray-800 font-mono leading-relaxed">
+                    {task.designerPrompt}
+                  </pre>
+                </div>
+                <div className="mt-4 flex gap-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      // Append designer's brief to developer's AI brief
+                      if (aiBrief) {
+                        const newBrief = aiBrief + '\n\n--- Designer\'s Reference ---\n' + task.designerPrompt;
+                        setAiBrief(newBrief);
+                        toast.success('Designer\'s brief appended to your brief');
+                      } else {
+                        setAiBrief(task.designerPrompt);
+                        toast.success('Designer\'s brief loaded as reference');
+                      }
+                    }}
+                  >
+                    <Sparkles className="w-4 h-4 mr-1" />
+                    Use as Reference
+                  </Button>
+                </div>
+              </CardBody>
+            </Card>
+          )}
+
           {/* Design Reference - For Developers */}
           {task.taskType === 'landing_page_development' && (task.designLink || task.designFile?.path || task.designNotes) && (
             <Card>
@@ -1837,7 +2002,7 @@ Script: (for video) Opening hook..."
                         Design Link
                       </h4>
                       <a
-                        href={task.designLink}
+                        href={normalizeUrl(task.designLink)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -1904,7 +2069,7 @@ Script: (for video) Opening hook..."
                         Landing Page URL
                       </h4>
                       <a
-                        href={task.implementationUrl}
+                        href={normalizeUrl(task.implementationUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-green-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -1923,7 +2088,7 @@ Script: (for video) Opening hook..."
                         Repository Link
                       </h4>
                       <a
-                        href={task.repoLink}
+                        href={normalizeUrl(task.repoLink)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -2073,6 +2238,13 @@ Script: (for video) Opening hook..."
                   </div>
                 )}
               </dl>
+            </CardBody>
+          </Card>
+
+          {/* Task Progress Timeline */}
+          <Card>
+            <CardBody className="p-4">
+              <TaskProgressTimeline task={task} />
             </CardBody>
           </Card>
 
@@ -2330,10 +2502,22 @@ Script: (for video) Opening hook..."
             </div>
           )}
 
-          {/* Actions */}
-          <Card>
-            <CardBody className="p-6 space-y-3">
-              {canStartTask() && (
+          {/* Actions - Only render if there's content to show */}
+          {(isAdmin || canStartTask() || canSubmitContent() || canSubmitCreative() || canSubmitTask() || canResubmitTask() || canSubmitLandingPage() || canSubmitLandingPageDev() || canTesterReview() || canMarketerApprove() || ['content_submitted', 'content_approved', 'content_rejected', 'submitted', 'design_submitted', 'development_submitted', 'design_approved', 'development_approved', 'approved_by_tester', 'final_approved'].includes(task?.status)) && (
+            <Card>
+              <CardBody className="p-6 space-y-3">
+              {/* Admin View-Only Message */}
+              {isAdmin && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                  <Eye className="w-5 h-5 mx-auto mb-2 text-blue-500" />
+                  <p className="text-sm text-blue-800 font-medium">View Only</p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    As an organization admin, you can view task details but cannot take actions.
+                  </p>
+                </div>
+              )}
+
+              {!isAdmin && canStartTask() && (
                 <Button
                   className="w-full"
                   onClick={() => handleStatusUpdate('in_progress')}
@@ -2343,7 +2527,7 @@ Script: (for video) Opening hook..."
                 </Button>
               )}
               {/* Content Creator Submit Button */}
-              {canSubmitContent() && (
+              {!isAdmin && canSubmitContent() && (
                 <Button
                   className="w-full"
                   onClick={() => setShowModal(true)}
@@ -2353,7 +2537,7 @@ Script: (for video) Opening hook..."
                 </Button>
               )}
               {/* Creative/Grammar Designer Submit Button */}
-              {canSubmitCreative() && (
+              {!isAdmin && canSubmitCreative() && (
                 <Button
                   className="w-full"
                   onClick={() => setShowModal(true)}
@@ -2363,7 +2547,7 @@ Script: (for video) Opening hook..."
                 </Button>
               )}
               {/* Landing Page Design/Development Submit Button */}
-              {(canSubmitTask() || canResubmitTask() || canSubmitLandingPage() || canSubmitLandingPageDev()) && (
+              {!isAdmin && (canSubmitTask() || canResubmitTask() || canSubmitLandingPage() || canSubmitLandingPageDev()) && (
                 <Button
                   className="w-full"
                   onClick={() => setShowModal(true)}
@@ -2374,7 +2558,7 @@ Script: (for video) Opening hook..."
               )}
 
               {/* Tester Review Actions */}
-              {canTesterReview() && (
+              {!isAdmin && canTesterReview() && (
                 <div className="space-y-3 pt-3 border-t">
                   <h4 className="font-medium text-gray-900">Tester Review</h4>
                   <p className="text-sm text-gray-500">
@@ -2402,7 +2586,7 @@ Script: (for video) Opening hook..."
               )}
 
               {/* Marketer Approval Actions */}
-              {canMarketerApprove() && (
+              {!isAdmin && canMarketerApprove() && (
                 <div className="space-y-3 pt-3 border-t">
                   <h4 className="font-medium text-gray-900">Marketer Review</h4>
                   <p className="text-sm text-gray-500">
@@ -2506,9 +2690,10 @@ Script: (for video) Opening hook..."
               )}
             </CardBody>
           </Card>
+          )}
 
           {/* SOP Reference */}
-          {task.sopReference && (
+          {/* {task.sopReference && (
             <Card>
               <CardBody className="p-6">
                 <h3 className="font-semibold text-gray-900 mb-2">SOP Reference</h3>
@@ -2523,7 +2708,7 @@ Script: (for video) Opening hook..."
                 </a>
               </CardBody>
             </Card>
-          )}
+          )} */}
         </div>
       </div>
 
@@ -2742,7 +2927,7 @@ Script: (for video) Opening hook..."
                         Design Reference from UI/UX Designer
                       </h4>
                       <a
-                        href={task.designLink}
+                        href={normalizeUrl(task.designLink)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:underline flex items-center gap-1 text-sm break-all"

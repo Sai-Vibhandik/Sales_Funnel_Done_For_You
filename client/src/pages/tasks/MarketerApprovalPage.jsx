@@ -3,11 +3,28 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, CardBody, Button, Spinner, Textarea, Badge } from '@/components/ui';
 import { taskService } from '@/services/api';
+import TaskProgressTimeline from '@/components/tasks/TaskProgressTimeline';
+import { useAuth } from '@/context/AuthContext';
 import {
   Clock, CheckCircle, XCircle, Eye, FileText, Palette, Video, Layout, Code,
   AlertCircle, ExternalLink, User, Link, MessageSquare, FileIcon, Download,
-  ArrowRight
+  ArrowRight, ChevronDown, ChevronUp
 } from 'lucide-react';
+
+// Utility function to ensure URLs have proper protocol
+const normalizeUrl = (url) => {
+  if (!url) return url;
+  // If already has protocol, return as-is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  // If it looks like a URL (has a dot or starts with www), add https://
+  if (url.includes('.') || url.startsWith('www.')) {
+    return `https://${url}`;
+  }
+  // Otherwise return as-is (could be a relative path or invalid)
+  return url;
+};
 
 const TASK_TYPES = {
   graphic_design: { label: 'Graphic Design', icon: Palette },
@@ -35,12 +52,17 @@ const REJECTION_REASONS = [
 
 export default function MarketerApprovalPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState([]);
   const [selectedTask, setSelectedTask] = useState(null);
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [rejectionNote, setRejectionNote] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
+  const [expandedProgress, setExpandedProgress] = useState({});
+  const [approvingTaskId, setApprovingTaskId] = useState(null);
+  const [rejecting, setRejecting] = useState(false);
 
   useEffect(() => {
     fetchPendingTasks();
@@ -59,22 +81,32 @@ export default function MarketerApprovalPage() {
   };
 
   const handleApprove = async (task) => {
+    // Prevent multiple clicks
+    if (approvingTaskId) return;
+
     try {
+      setApprovingTaskId(task._id);
       await taskService.marketerReview(task._id, { approved: true });
       toast.success('Task fully approved and ready for deployment!');
       fetchPendingTasks();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to approve task');
+    } finally {
+      setApprovingTaskId(null);
     }
   };
 
   const handleReject = async () => {
+    // Prevent multiple clicks
+    if (rejecting) return;
+
     if (!rejectionNote.trim()) {
       toast.error('Please provide feedback for rejection');
       return;
     }
 
     try {
+      setRejecting(true);
       await taskService.marketerReview(selectedTask._id, {
         approved: false,
         rejectionNote,
@@ -88,6 +120,8 @@ export default function MarketerApprovalPage() {
       fetchPendingTasks();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to reject task');
+    } finally {
+      setRejecting(false);
     }
   };
 
@@ -181,7 +215,7 @@ export default function MarketerApprovalPage() {
                           Creative Link
                         </h4>
                         <a
-                          href={task.creativeLink}
+                          href={normalizeUrl(task.creativeLink)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -238,7 +272,7 @@ export default function MarketerApprovalPage() {
                               Content Link
                             </h4>
                             <a
-                              href={task.contentLink}
+                              href={normalizeUrl(task.contentLink)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-green-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -323,7 +357,7 @@ export default function MarketerApprovalPage() {
                               Design Link
                             </h4>
                             <a
-                              href={task.designLink}
+                              href={normalizeUrl(task.designLink)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-purple-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -377,7 +411,7 @@ export default function MarketerApprovalPage() {
                               Landing Page URL
                             </h4>
                             <a
-                              href={task.implementationUrl}
+                              href={normalizeUrl(task.implementationUrl)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-green-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -396,7 +430,7 @@ export default function MarketerApprovalPage() {
                               Repository Link
                             </h4>
                             <a
-                              href={task.repoLink}
+                              href={normalizeUrl(task.repoLink)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -427,7 +461,7 @@ export default function MarketerApprovalPage() {
                             </h4>
                             {task.designLink && (
                               <a
-                                href={task.designLink}
+                                href={normalizeUrl(task.designLink)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-purple-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -504,27 +538,63 @@ export default function MarketerApprovalPage() {
                     <div className="mt-3 text-sm text-gray-500">
                       <span>Created by: {task.assignedTo?.name || 'Unassigned'}</span>
                     </div>
+
+                    {/* Task Progress Timeline */}
+                    <div className="mt-4">
+                      <button
+                        onClick={() => setExpandedProgress(prev => ({ ...prev, [task._id]: !prev[task._id] }))}
+                        className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                      >
+                        <Clock className="w-4 h-4" />
+                        {expandedProgress[task._id] ? 'Hide Progress' : 'View Progress'}
+                        {expandedProgress[task._id] ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </button>
+                      {expandedProgress[task._id] && (
+                        <div className="mt-3">
+                          <TaskProgressTimeline task={task} />
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Actions */}
                   <div className="flex flex-col gap-2 ml-4">
-                    <Button
-                      size="sm"
-                      onClick={() => handleApprove(task)}
-                      className="bg-green-600 hover:bg-green-700"
-                    >
-                      <CheckCircle className="w-4 h-4 mr-1" />
-                      Final Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => openRejectionModal(task)}
-                      className="text-red-600 border-red-300 hover:bg-red-50"
-                    >
-                      <XCircle className="w-4 h-4 mr-1" />
-                      Reject
-                    </Button>
+                    {isAdmin ? (
+                      <div className="text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-lg text-center">
+                        <Eye className="w-4 h-4 inline mr-1" />
+                        View Only
+                      </div>
+                    ) : (
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={() => handleApprove(task)}
+                          disabled={approvingTaskId === task._id}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          {approvingTaskId === task._id ? (
+                            <>
+                              <span className="animate-spin mr-1">⏳</span>
+                              Approving...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Final Approve
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => openRejectionModal(task)}
+                          className="text-red-600 border-red-300 hover:bg-red-50"
+                        >
+                          <XCircle className="w-4 h-4 mr-1" />
+                          Reject
+                        </Button>
+                      </>
+                    )}
                     <Button
                       size="sm"
                       variant="ghost"
@@ -588,14 +658,15 @@ export default function MarketerApprovalPage() {
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
-              <Button variant="secondary" onClick={() => setShowRejectionModal(false)}>
+              <Button variant="secondary" onClick={() => setShowRejectionModal(false)} disabled={rejecting}>
                 Cancel
               </Button>
               <Button
                 onClick={handleReject}
+                disabled={rejecting}
                 className="bg-red-600 hover:bg-red-700"
               >
-                Reject Task
+                {rejecting ? 'Rejecting...' : 'Reject Task'}
               </Button>
             </div>
           </div>

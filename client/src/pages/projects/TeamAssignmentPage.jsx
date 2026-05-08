@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { authService, projectService } from '@/services/api';
-import { Card, CardBody, CardHeader, Button, Badge, Spinner } from '@/components/ui';
+import { Card, CardBody, CardHeader, Button, Badge, Spinner, Select } from '@/components/ui';
 import { ArrowLeft, Users, UserPlus, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { extractData } from '@/utils/apiResponse';
@@ -20,6 +20,8 @@ const ROLE_CONFIG = {
     borderColor: 'border-blue-200',
     bgColor: 'rgba(59, 130, 246, 0.1)',
     singleSelect: true, // Only ONE performance marketer per project
+    required: true, // Mandatory selection
+    useDropdown: false, // Uses card selection (single-select)
   },
   content_writer: {
     label: 'Content Planner',
@@ -68,7 +70,8 @@ const ROLE_CONFIG = {
     color: 'bg-orange-100 text-orange-700',
     borderColor: 'border-orange-200',
     bgColor: 'rgba(249, 115, 22, 0.1)',
-    singleSelect: true, // Only ONE tester per project to avoid confusion in task assignment
+    // required: true, // Mandatory selection - at least one tester required (commented out for now)
+    useDropdown: false, // Uses card selection (multi-select)
   },
 };
 
@@ -80,6 +83,7 @@ export default function TeamAssignmentPage() {
   const [project, setProject] = useState(null);
   const [teamByRole, setTeamByRole] = useState({});
   const [selectedTeam, setSelectedTeam] = useState({}); // { roleKey: [memberId1, memberId2, ...] }
+  const [validationErrors, setValidationErrors] = useState({});
 
   useEffect(() => {
     fetchData();
@@ -156,6 +160,14 @@ export default function TeamAssignmentPage() {
 
       // Performance Marketer is single-select - only one allowed per project
       if (roleConfig?.singleSelect) {
+        // Clear validation error when selection is made
+        if (validationErrors[role]) {
+          setValidationErrors(prevErr => {
+            const newErrors = { ...prevErr };
+            delete newErrors[role];
+            return newErrors;
+          });
+        }
         return {
           ...prev,
           [role]: isSelected ? [] : [memberId] // Replace with new selection or clear
@@ -180,9 +192,43 @@ export default function TeamAssignmentPage() {
     }));
   };
 
+  // Handle dropdown selection (for single-select roles like tester)
+  const handleDropdownSelect = (role, memberId) => {
+    setSelectedTeam(prev => ({
+      ...prev,
+      [role]: memberId ? [memberId] : []
+    }));
+    // Clear validation error when selection is made
+    if (validationErrors[role]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[role];
+        return newErrors;
+      });
+    }
+  };
+
   const handleSave = async () => {
     try {
       setSaving(true);
+      setValidationErrors({});
+
+      // Validate required roles
+      const errors = {};
+      Object.entries(ROLE_CONFIG).forEach(([roleKey, config]) => {
+        if (config.required) {
+          const selectedMembers = selectedTeam[roleKey] || [];
+          if (selectedMembers.length === 0) {
+            errors[roleKey] = `${config.label} is required`;
+          }
+        }
+      });
+
+      if (Object.keys(errors).length > 0) {
+        setValidationErrors(errors);
+        toast.error('Please select required team members');
+        return;
+      }
 
       // Convert selectedTeam (role keys) to assignedTeam fields (arrays)
       const assignedTeamData = {};
@@ -293,7 +339,7 @@ export default function TeamAssignmentPage() {
             <h3 className="text-lg font-semibold text-gray-900">Team Assignment</h3>
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            Assign team members to project roles. Performance Marketer and Tester are limited to one person per project.
+            Assign team members to project roles. Performance Marketer (one per project) and at least one Tester are required.
           </p>
         </CardHeader>
         <CardBody className="p-6">
@@ -303,11 +349,15 @@ export default function TeamAssignmentPage() {
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-sm font-medium text-gray-700">
                     {config.label}
-                    {config.singleSelect ? (
+                    {config.required && (
+                      <span className="text-red-500 ml-1">*</span>
+                    )}
+                    {config.singleSelect && (
                       <span className="ml-2 text-xs text-blue-600 font-normal">
                         (One per project)
                       </span>
-                    ) : (selectedTeam[roleKey] || []).length > 0 && (
+                    )}
+                    {!config.singleSelect && (selectedTeam[roleKey] || []).length > 0 && (
                       <span className="ml-2 text-xs text-gray-500">
                         ({selectedTeam[roleKey].length} selected)
                       </span>
@@ -315,80 +365,138 @@ export default function TeamAssignmentPage() {
                   </h4>
                 </div>
 
-                {/* Selected members badges */}
-                {(selectedTeam[roleKey] || []).length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {selectedTeam[roleKey].map(memberId => {
-                      const member = teamByRole[roleKey]?.find(m => m._id === memberId);
-                      return member ? (
-                        <Badge
-                          key={memberId}
-                          variant="primary"
-                          className="flex items-center gap-1 px-3 py-1"
-                        >
-                          {member.name}
-                          <button
-                            onClick={() => removeMember(roleKey, memberId)}
-                            className="ml-1 hover:bg-white/20 rounded-full p-0.5"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </Badge>
-                      ) : null;
-                    })}
-                  </div>
+                {/* Validation error */}
+                {validationErrors[roleKey] && (
+                  <p className="text-sm text-red-600 mb-2">{validationErrors[roleKey]}</p>
                 )}
 
-                {teamByRole[roleKey]?.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {teamByRole[roleKey].map((member) => {
-                      const isSelected = (selectedTeam[roleKey] || []).includes(member._id);
-                      return (
-                        <button
-                          key={member._id}
-                          onClick={() => toggleMember(roleKey, member._id)}
-                          className={cn(
-                            'flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left',
-                            isSelected
-                              ? `${config.borderColor}`
-                              : 'border-gray-100 hover:border-gray-200'
-                          )}
-                          style={{
-                            backgroundColor: isSelected ? config.bgColor : 'white'
-                          }}
-                        >
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-semibold">
-                            {member.name?.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900 truncate">
-                              {member.name}
-                            </p>
-                            <p className="text-sm text-gray-500 truncate">
-                              {member.email}
-                            </p>
-                            {member.specialization && (
-                              <p className="text-xs text-gray-400 truncate">
-                                {member.specialization}
-                              </p>
-                            )}
-                          </div>
-                          {isSelected && (
-                            <div className={cn(
-                              'w-6 h-6 rounded-full flex items-center justify-center',
-                              config.color.split(' ')[0]
-                            )}>
-                              <Check className="w-4 h-4 text-white" />
+                {/* Dropdown for tester role */}
+                {config.useDropdown ? (
+                  <div className="max-w-md">
+                    <Select
+                      value={(selectedTeam[roleKey] || [])[0] || ''}
+                      onChange={(e) => handleDropdownSelect(roleKey, e.target.value)}
+                      placeholder={`Select ${config.label}...`}
+                      error={validationErrors[roleKey]}
+                      options={(teamByRole[roleKey] || []).map(member => ({
+                        value: member._id,
+                        label: member.name
+                      }))}
+                    />
+                    {(selectedTeam[roleKey] || []).length > 0 && (
+                      <div className="mt-2">
+                        {(() => {
+                          const memberId = (selectedTeam[roleKey] || [])[0];
+                          const member = teamByRole[roleKey]?.find(m => m._id === memberId);
+                          if (!member) return null;
+                          return (
+                            <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white text-sm font-semibold">
+                                {member.name?.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {member.name}
+                                </p>
+                                <p className="text-xs text-gray-500 truncate">
+                                  {member.email}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => handleDropdownSelect(roleKey, '')}
+                                className="text-gray-400 hover:text-gray-600"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
                             </div>
-                          )}
-                        </button>
-                      );
-                    })}
+                          );
+                        })()}
+                      </div>
+                    )}
+                    {teamByRole[roleKey]?.length === 0 && (
+                      <p className="text-sm text-gray-400 italic mt-2">
+                        No testers available. Add team members in Team Management.
+                      </p>
+                    )}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-400 italic">
-                    No team members available for this role. Add team members in Team Management.
-                  </p>
+                  <>
+                    {/* Selected members badges */}
+                    {(selectedTeam[roleKey] || []).length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {selectedTeam[roleKey].map(memberId => {
+                          const member = teamByRole[roleKey]?.find(m => m._id === memberId);
+                          return member ? (
+                            <Badge
+                              key={memberId}
+                              variant="primary"
+                              className="flex items-center gap-1 px-3 py-1"
+                            >
+                              {member.name}
+                              <button
+                                onClick={() => removeMember(roleKey, memberId)}
+                                className="ml-1 hover:bg-white/20 rounded-full p-0.5"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </Badge>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+
+                    {teamByRole[roleKey]?.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {teamByRole[roleKey].map((member) => {
+                          const isSelected = (selectedTeam[roleKey] || []).includes(member._id);
+                          return (
+                            <button
+                              key={member._id}
+                              onClick={() => toggleMember(roleKey, member._id)}
+                              className={cn(
+                                'flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left',
+                                isSelected
+                                  ? `${config.borderColor}`
+                                  : 'border-gray-100 hover:border-gray-200'
+                              )}
+                              style={{
+                                backgroundColor: isSelected ? config.bgColor : 'white'
+                              }}
+                            >
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-semibold">
+                                {member.name?.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-gray-900 truncate">
+                                  {member.name}
+                                </p>
+                                <p className="text-sm text-gray-500 truncate">
+                                  {member.email}
+                                </p>
+                                {member.specialization && (
+                                  <p className="text-xs text-gray-400 truncate">
+                                    {member.specialization}
+                                  </p>
+                                )}
+                              </div>
+                              {isSelected && (
+                                <div className={cn(
+                                  'w-6 h-6 rounded-full flex items-center justify-center',
+                                  config.color.split(' ')[0]
+                                )}>
+                                  <Check className="w-4 h-4 text-white" />
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400 italic">
+                        No team members available for this role. Add team members in Team Management.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             ))}

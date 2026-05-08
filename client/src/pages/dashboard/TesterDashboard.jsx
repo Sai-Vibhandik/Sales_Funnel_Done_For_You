@@ -50,25 +50,26 @@ function StatCard({ title, value, change, changeType, icon: Icon, iconBg }) {
   const isPositive = changeType === 'positive';
   return (
     <div className="stat-card-enhanced">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <p className="text-sm text-gray-500 font-medium">{title}</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs sm:text-sm text-gray-500 font-medium">{title}</p>
+          <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">{value}</p>
           {change && (
-            <div className="flex items-center gap-1 mt-2">
+            <div className="flex items-center gap-1 mt-1 sm:mt-2">
               {isPositive ? (
-                <CheckCircle size={16} className="text-green-500" />
+                <CheckCircle size={14} className="text-green-500 sm:w-4 sm:h-4" />
               ) : (
-                <Hourglass size={16} className="text-orange-500" />
+                <Hourglass size={14} className="text-orange-500 sm:w-4 sm:h-4" />
               )}
-              <span className={cn('text-sm font-medium', isPositive ? 'text-green-600' : 'text-orange-600')}>
+              <span className={cn('text-xs sm:text-sm font-medium', isPositive ? 'text-green-600' : 'text-orange-600')}>
                 {change}
               </span>
             </div>
           )}
         </div>
-        <div className={cn('p-3 rounded-2xl', iconBg)}>
-          <Icon size={24} className="text-white" />
+        <div className={cn('p-2 sm:p-3 rounded-xl sm:rounded-2xl flex-shrink-0', iconBg)}>
+          <Icon size={18} className="text-white sm:hidden" />
+          <Icon size={24} className="text-white hidden sm:block" />
         </div>
       </div>
     </div>
@@ -352,26 +353,27 @@ export default function TesterDashboard({ user }) {
   ).slice(0, 6);
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-4 sm:space-y-6 animate-fadeIn overflow-x-hidden">
       {/* Welcome Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600">
-            <Bug size={24} className="text-white" />
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex-shrink-0">
+            <Bug size={20} className="text-white sm:hidden" />
+            <Bug size={24} className="text-white hidden sm:block" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Tester Dashboard</h1>
-            <p className="text-gray-500 mt-1">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">Tester Dashboard</h1>
+            <p className="text-gray-500 mt-1 text-sm sm:text-base truncate">
               Welcome back, {user?.name?.split(' ')[0] || 'Tester'}! Review and approve submitted work.
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => navigate('/dashboard/projects')}>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Button variant="outline" onClick={() => navigate('/dashboard/projects')} className="flex-1 sm:flex-none">
             <FolderKanban size={18} className="mr-2" />
             Projects
           </Button>
-          <Button onClick={() => navigate('/dashboard/tasks/review')} className="relative">
+          <Button onClick={() => navigate('/dashboard/tasks/review')} className="relative flex-1 sm:flex-none">
             <ClipboardCheck size={18} className="mr-2" />
             Review Queue
             {stats.totalPending > 0 && (
@@ -384,7 +386,7 @@ export default function TesterDashboard({ user }) {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
         <StatCard
           title="Pending Review"
           value={String(stats.totalPending)}
@@ -416,7 +418,7 @@ export default function TesterDashboard({ user }) {
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Pie Chart - Review Status Distribution */}
         <div className="lg:col-span-1 chart-container-enhanced">
           <div className="flex items-center gap-3 mb-4">
@@ -588,7 +590,7 @@ export default function TesterDashboard({ user }) {
         </div>
 
         {pendingTasks.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {pendingTasks.map((task) => (
               <ReviewTaskCard
                 key={task._id}
@@ -626,7 +628,7 @@ export default function TesterDashboard({ user }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {recentlyReviewed.slice(0, 6).map((task) => (
               <ReviewedTaskCard
                 key={task._id}
@@ -638,16 +640,16 @@ export default function TesterDashboard({ user }) {
       )}
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <button
           onClick={() => navigate('/dashboard/tasks/review')}
-          className="p-4 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl text-white text-left hover:shadow-lg transition-all duration-200"
+          className="p-4 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl sm:rounded-2xl text-white text-left hover:shadow-lg transition-all duration-200"
         >
-          <ClipboardCheck size={24} className="mb-2" />
-          <p className="font-semibold">Review Queue</p>
-          <p className="text-sm text-white/80 mt-1">Approve or reject submitted work</p>
+          <ClipboardCheck size={20} className="mb-2 sm:w-6 sm:h-6" />
+          <p className="font-semibold text-sm sm:text-base">Review Queue</p>
+          <p className="text-xs sm:text-sm text-white/80 mt-1">Approve or reject submitted work</p>
           {stats.totalPending > 0 && (
-            <Badge className="mt-2 bg-white/20 text-white">
+            <Badge className="mt-2 bg-white/20 text-white text-xs">
               {stats.totalPending} pending
             </Badge>
           )}
@@ -656,17 +658,17 @@ export default function TesterDashboard({ user }) {
           onClick={() => navigate('/dashboard/tasks')}
           className="enhanced-card p-4 text-gray-900 text-left"
         >
-          <Bug size={24} className="mb-2 text-primary-500" />
-          <p className="font-semibold">My Tasks</p>
-          <p className="text-sm text-gray-500 mt-1">View your assigned tasks</p>
+          <Bug size={20} className="mb-2 text-primary-500 sm:w-6 sm:h-6" />
+          <p className="font-semibold text-sm sm:text-base">My Tasks</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">View your assigned tasks</p>
         </button>
         <button
           onClick={() => navigate('/dashboard/projects')}
           className="enhanced-card p-4 text-gray-900 text-left"
         >
-          <FolderKanban size={24} className="mb-2 text-green-500" />
-          <p className="font-semibold">All Projects</p>
-          <p className="text-sm text-gray-500 mt-1">Browse project overview</p>
+          <FolderKanban size={20} className="mb-2 text-green-500 sm:w-6 sm:h-6" />
+          <p className="font-semibold text-sm sm:text-base">All Projects</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">Browse project overview</p>
         </button>
       </div>
 

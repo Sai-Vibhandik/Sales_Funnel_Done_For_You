@@ -125,7 +125,6 @@ export default function LandingPagesListPage() {
           <p className="text-gray-600 mt-1">{project?.businessName}</p>
         </div>
         <div className="text-right">
-          <div className="text-sm text-gray-500">Stage 5 of 6</div>
           {isAdmin && !isPerformanceMarketer && (
             <div className="flex items-center gap-1 text-blue-600 text-sm mt-1">
               <Eye className="w-4 h-4" />
@@ -192,7 +191,7 @@ export default function LandingPagesListPage() {
 
       {/* Progress */}
       <Card>
-        <CardBody className="p-4">
+        <CardBody className="p-3 sm:p-4">
           <StageProgressTracker stages={project?.stages} currentStage={project?.currentStage} />
         </CardBody>
       </Card>

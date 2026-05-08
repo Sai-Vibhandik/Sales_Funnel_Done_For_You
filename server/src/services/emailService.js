@@ -4,7 +4,9 @@ const {
   teamInvitationTemplate,
   taskAssignmentTemplate,
   projectAssignmentTemplate,
-  teamMemberCreatedTemplate
+  teamMemberCreatedTemplate,
+  expiryReminderTemplate,
+  subscriptionExpiredTemplate
 } = require('../utils/emailTemplates');
 
 // Debug: Confirm templates loaded
@@ -199,10 +201,70 @@ const sendTeamMemberCreatedNotification = async (user, organization, createdBy, 
   }
 };
 
+/**
+ * Send subscription expiry reminder email
+ * @param {Object} user - The organization admin
+ * @param {Object} organization - The organization
+ * @param {Object} plan - The current plan
+ * @param {number} daysRemaining - Days until expiry
+ */
+const sendSubscriptionExpiryReminder = async (user, organization, plan, daysRemaining) => {
+  console.log('=== sendSubscriptionExpiryReminder called ===');
+  console.log('User:', user?.name, user?.email);
+  console.log('Organization:', organization?.name);
+  console.log('Days remaining:', daysRemaining);
+
+  try {
+    const { subject, html } = expiryReminderTemplate(user, organization, plan, daysRemaining);
+
+    await sendEmail({
+      email: user.email,
+      subject,
+      html
+    });
+
+    console.log(`Subscription expiry reminder sent to ${user.email}`);
+  } catch (error) {
+    console.error('Error sending subscription expiry reminder:', error);
+    console.error('Error stack:', error.stack);
+    // Don't throw - email failures should not block the main operation
+  }
+};
+
+/**
+ * Send subscription expired notification email
+ * @param {Object} user - The organization admin
+ * @param {Object} organization - The organization
+ * @param {Object} plan - The expired plan
+ */
+const sendSubscriptionExpiredNotification = async (user, organization, plan) => {
+  console.log('=== sendSubscriptionExpiredNotification called ===');
+  console.log('User:', user?.name, user?.email);
+  console.log('Organization:', organization?.name);
+
+  try {
+    const { subject, html } = subscriptionExpiredTemplate(user, organization, plan);
+
+    await sendEmail({
+      email: user.email,
+      subject,
+      html
+    });
+
+    console.log(`Subscription expired notification sent to ${user.email}`);
+  } catch (error) {
+    console.error('Error sending subscription expired notification:', error);
+    console.error('Error stack:', error.stack);
+    // Don't throw - email failures should not block the main operation
+  }
+};
+
 module.exports = {
   sendOrgRegistrationNotification,
   sendTeamInvitation,
   sendTaskAssignmentNotification,
   sendProjectAssignmentNotification,
-  sendTeamMemberCreatedNotification
+  sendTeamMemberCreatedNotification,
+  sendSubscriptionExpiryReminder,
+  sendSubscriptionExpiredNotification
 };

@@ -25,6 +25,21 @@ import {
   Send
 } from 'lucide-react';
 
+// Utility function to ensure URLs have proper protocol
+const normalizeUrl = (url) => {
+  if (!url) return url;
+  // If already has protocol, return as-is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  // If it looks like a URL (has a dot or starts with www), add https://
+  if (url.includes('.') || url.startsWith('www.')) {
+    return `https://${url}`;
+  }
+  // Otherwise return as-is (could be a relative path or invalid)
+  return url;
+};
+
 const TASK_TYPE_CONFIG = {
   graphic_design: { label: 'Graphic Design', icon: Image, color: 'bg-blue-100 text-blue-800' },
   video_editing: { label: 'Video Editing', icon: Video, color: 'bg-purple-100 text-purple-800' },
@@ -185,7 +200,7 @@ export default function ProjectAssetsDetailPage() {
                     Creative Link
                   </h4>
                   <a
-                    href={task.creativeLink}
+                    href={normalizeUrl(task.creativeLink)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -204,7 +219,7 @@ export default function ProjectAssetsDetailPage() {
                     Landing Page URL
                   </h4>
                   <a
-                    href={task.implementationUrl}
+                    href={normalizeUrl(task.implementationUrl)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-green-600 hover:underline flex items-center gap-1 text-sm break-all"
@@ -223,7 +238,7 @@ export default function ProjectAssetsDetailPage() {
                     Design Link
                   </h4>
                   <a
-                    href={task.designLink}
+                    href={normalizeUrl(task.designLink)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-purple-600 hover:underline flex items-center gap-1 text-sm break-all"

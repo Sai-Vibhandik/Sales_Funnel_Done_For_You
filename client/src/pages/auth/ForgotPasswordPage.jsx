@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Mail, ArrowLeft, Loader2 } from 'lucide-react';
 import { Button, Input, Card, CardBody } from '@/components/ui';
 import api from '@/services/api';
-import growthValleyLogo from '@/assets/growth-valley-logo.webp';
+import growthValleyLogo from '../../assets/growth-valley-logo.webp';
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -103,9 +103,12 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <div className="mx-auto w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center mb-4">
-            <span className="text-white font-bold text-xl">GV</span>
-          </div>
+          {/* <div className="mx-auto w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center mb-4"> */}
+ <img
+              src={growthValleyLogo}
+              alt="Growth Valley"
+              className="mx-auto h-16 w-auto rounded-xl object-contain"
+            />        
           <h1 className="text-3xl font-bold text-gray-900">Growth Valley</h1>
           <p className="mt-2 text-gray-600">Performance Marketer Dashboard</p>
         </div>

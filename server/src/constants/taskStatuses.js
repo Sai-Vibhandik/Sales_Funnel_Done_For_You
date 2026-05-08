@@ -17,6 +17,7 @@ const TASK_STATUS_VALUES = {
   // Content workflow
   CONTENT_PENDING: 'content_pending',
   CONTENT_SUBMITTED: 'content_submitted',
+  CONTENT_APPROVED: 'content_approved',       // Approved by tester, awaiting marketer review
   CONTENT_FINAL_APPROVED: 'content_final_approved',
   CONTENT_REJECTED: 'content_rejected',
 
@@ -37,8 +38,7 @@ const TASK_STATUS_VALUES = {
 
   // Legacy statuses (for backward compatibility - deprecated)
   SUBMITTED: 'submitted',
-  APPROVED_BY_TESTER: 'approved_by_tester',
-  CONTENT_APPROVED: 'content_approved'
+  APPROVED_BY_TESTER: 'approved_by_tester'
 };
 
 // Array of all valid statuses (for mongoose enum)
@@ -50,6 +50,7 @@ const TASK_STATUSES = [
   // Content workflow
   'content_pending',
   'content_submitted',
+  'content_approved',
   'content_final_approved',
   'content_rejected',
 
@@ -70,8 +71,7 @@ const TASK_STATUSES = [
 
   // Legacy (deprecated)
   'submitted',
-  'approved_by_tester',
-  'content_approved'
+  'approved_by_tester'
 ];
 
 // Status Groups (for filtering and categorization)
@@ -95,18 +95,17 @@ const SUBMITTED_STATUSES = [
 ];
 
 // Tasks approved by tester (awaiting marketer approval)
-// Note: content_final_approved goes directly to designer, NOT to marketer
 const APPROVED_STATUSES = [
   'approved_by_tester', // legacy
+  'content_approved',      // Content approved by tester, awaiting marketer
   'design_approved',       // Design approved by tester, awaiting marketer
   'development_approved'   // Development approved by tester, awaiting marketer
 ];
 
 // All tester-approved statuses (for showing approved assets to testers)
-// This includes content_final_approved which doesn't go to marketer
 const TESTER_APPROVED_STATUSES = [
   ...APPROVED_STATUSES,
-  'content_final_approved'  // Content approved by tester, handed off to design
+  'content_final_approved'  // Content approved by marketer, handed off to design
 ];
 
 // Tasks fully approved (completed)
@@ -176,6 +175,15 @@ const STATUS_CONFIG = {
     group: 'content',
     description: 'Content submitted for tester review'
   },
+  content_approved: {
+    label: 'In Final Review',
+    color: 'purple',
+    bgColor: 'bg-purple-100',
+    textColor: 'text-purple-800',
+    icon: 'CheckCircle',
+    group: 'content',
+    description: 'Tester approved, awaiting marketer review'
+  },
   content_final_approved: {
     label: 'Approved',
     color: 'green',
@@ -183,7 +191,7 @@ const STATUS_CONFIG = {
     textColor: 'text-green-800',
     icon: 'CheckCircle',
     group: 'content',
-    description: 'Content approved by tester, ready for design'
+    description: 'Content approved by marketer, ready for design'
   },
   content_rejected: {
     label: 'Revision Needed',
@@ -302,16 +310,6 @@ const STATUS_CONFIG = {
     group: 'legacy',
     deprecated: true,
     description: 'Tester approved, awaiting marketer review (legacy status)'
-  },
-  content_approved: {
-    label: 'Approved',
-    color: 'purple',
-    bgColor: 'bg-purple-100',
-    textColor: 'text-purple-800',
-    icon: 'CheckCircle',
-    group: 'legacy',
-    deprecated: true,
-    description: 'Content approved (legacy status)'
   }
 };
 
@@ -393,7 +391,8 @@ function canBeReviewedByTester(status) {
  * @returns {boolean} True if task can be approved by marketer
  */
 function canBeApprovedByMarketer(status) {
-  return status === 'design_approved' ||
+  return status === 'content_approved' ||
+         status === 'design_approved' ||
          status === 'development_approved' ||
          status === 'approved_by_tester'; // legacy
 }
@@ -442,10 +441,10 @@ function getValidTransitions(currentStatus, taskType) {
 
     // Content creation workflow
     content_pending: ['content_submitted'],
-    content_submitted: ['content_final_approved', 'content_rejected'],
-    content_approved: ['content_final_approved', 'content_rejected'], // Legacy
+    content_submitted: ['content_approved', 'content_rejected'],
+    content_approved: ['content_final_approved', 'content_rejected'],
     content_rejected: ['content_submitted'],
-    // Content approved by tester -> ready for design
+    // Content approved by marketer -> ready for design
     content_final_approved: ['design_pending'],
 
     // Design workflow (for graphic design/video tasks after content approval)

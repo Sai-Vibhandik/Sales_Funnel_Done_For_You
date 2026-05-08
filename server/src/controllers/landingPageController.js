@@ -6,6 +6,7 @@ const { completeStage, getStageStatus } = require('../middleware/stageGating');
 const { hasProjectAccess } = require('../utils/auth');
 const emailService = require('../services/emailService');
 const UsageService = require('../services/usageService');
+const { buildUrl } = require('../utils/urlHelper');
 
 const checkProjectAccess = async (projectId, user, organizationId = null) => {
   const orgId = organizationId || user.currentOrganization;
@@ -260,6 +261,58 @@ exports.updateLandingPage = async (req, res, next) => {
 
     await landingPage.save();
 
+    // Update existing tasks for this landing page
+    try {
+      const existingTasks = await Task.find({
+        landingPageId: landingPage._id,
+        projectId
+      });
+
+      if (existingTasks.length > 0) {
+        const platformStr = landingPage.platform || '';
+        const lpName = landingPage.name || 'Landing Page';
+        const lpType = landingPage.type || landingPage.funnelType || 'video_sales_letter';
+        const leadCaptureMethod = landingPage.leadCaptureMethod || landingPage.leadCapture?.method || 'form';
+
+        for (const task of existingTasks) {
+          // Update task title if name changed
+          if (task.taskType === 'landing_page_design') {
+            task.taskTitle = `Design: ${lpName}`;
+          } else if (task.taskType === 'landing_page_development') {
+            task.taskTitle = `Develop: ${lpName}`;
+          }
+
+          // Update strategy context with correct field names
+          task.strategyContext = {
+            ...task.strategyContext,
+            businessName: project.businessName || project.customerName,
+            industry: project.industry || '',
+            platform: platformStr,
+            hook: landingPage.hook || '',
+            creativeAngle: landingPage.angle || '',
+            headline: landingPage.headline || '',
+            cta: landingPage.ctaText || landingPage.cta || '',
+            // These are the fields displayed in the UI
+            funnelStage: lpType, // funnelStage is displayed as "Funnel Stage"
+            creativeType: task.taskType === 'landing_page_design' ? 'landing_page_design' : 'landing_page_development', // creativeType is displayed as "Creative Type"
+            landingPageType: lpType,
+            leadCapture: landingPage.leadCapture || null,
+            leadCaptureMethod: leadCaptureMethod
+          };
+
+          // Update landing page type on task
+          task.landingPageType = lpType;
+
+          await task.save();
+        }
+
+        console.log(`Updated ${existingTasks.length} tasks for landing page ${landingPageId}`);
+      }
+    } catch (taskUpdateError) {
+      console.error('Error updating landing page tasks:', taskUpdateError);
+      // Don't fail the request if task update fails
+    }
+
     res.status(200).json({
       success: true,
       data: {
@@ -419,6 +472,7 @@ exports.completeLandingPage = async (req, res, next) => {
 
 // Helper function to generate tasks for a landing page
 // FIX: Checks for existing tasks first to prevent duplicates on re-runs
+// FIX: Supports multiple designers and developers per landing page
 const generateLandingPageTasks = async (project, landingPage, userId) => {
   // Check if tasks already exist for this landing page
   const existingTasks = await Task.find({
@@ -459,67 +513,184 @@ const generateLandingPageTasks = async (project, landingPage, userId) => {
     offer: offer?.bonuses?.map(b => b.title).join(', ') || ''
   };
 
-  // Resolve UI/UX designer:
-  // Priority: landing page's assignedDesigner → project team's uiUxDesigners[0] → legacy uiUxDesigner
-  const uiuxDesignerId =
-    landingPage.assignedDesigner?._id ||
-    landingPage.assignedDesigner ||
-    project.assignedTeam?.uiUxDesigners?.[0]?._id ||
-    project.assignedTeam?.uiUxDesigners?.[0] ||
-    project.assignedTeam?.uiUxDesigner?._id ||
-    project.assignedTeam?.uiUxDesigner ||
+  // Landing page type for funnelStage
+  const lpType = landingPage.type || landingPage.funnelType || 'video_sales_letter';
+  const leadCaptureMethod = landingPage.leadCaptureMethod || landingPage.leadCapture?.method || 'form';
+
+  // Resolve testers (for design and development review)
+  let testerIds = [];
+  if (landingPage.assignedTesters && Array.isArray(landingPage.assignedTesters) && landingPage.assignedTesters.length > 0) {
+    testerIds = landingPage.assignedTesters.map(t => t._id || t);
+  } else if (project.assignedTeam?.testers && project.assignedTeam.testers.length > 0) {
+    testerIds = project.assignedTeam.testers.map(t => t._id || t);
+  } else if (project.assignedTeam?.tester) {
+    testerIds = [project.assignedTeam.tester._id || project.assignedTeam.tester];
+  }
+
+  // Get performance marketer for final approval
+  const marketerId = project.assignedTeam?.performanceMarketers?.[0]?._id ||
+    project.assignedTeam?.performanceMarketers?.[0] ||
+    project.assignedTeam?.performanceMarketer?._id ||
+    project.assignedTeam?.performanceMarketer ||
     null;
 
-  // Resolve developer:
-  // Priority: landing page's assignedDeveloper → project team's developers[0] → legacy developer
-  const developerId =
-    landingPage.assignedDeveloper?._id ||
-    landingPage.assignedDeveloper ||
-    project.assignedTeam?.developers?.[0]?._id ||
-    project.assignedTeam?.developers?.[0] ||
-    project.assignedTeam?.developer?._id ||
-    project.assignedTeam?.developer ||
-    null;
+  // Resolve UI/UX designers (SUPPORT MULTIPLE DESIGNERS)
+  // Priority: landing page's assignedDesigners array → legacy assignedDesigner → project team's uiUxDesigners
+  let designerIds = [];
+  if (landingPage.assignedDesigners && Array.isArray(landingPage.assignedDesigners) && landingPage.assignedDesigners.length > 0) {
+    designerIds = landingPage.assignedDesigners.map(d => d._id || d);
+  } else if (landingPage.assignedDesigner) {
+    designerIds = [landingPage.assignedDesigner._id || landingPage.assignedDesigner];
+  } else if (project.assignedTeam?.uiUxDesigners && project.assignedTeam.uiUxDesigners.length > 0) {
+    designerIds = project.assignedTeam.uiUxDesigners.map(d => d._id || d);
+  } else if (project.assignedTeam?.uiUxDesigner) {
+    designerIds = [project.assignedTeam.uiUxDesigner._id || project.assignedTeam.uiUxDesigner];
+  }
 
-  const contextLink = `${process.env.CLIENT_URL}/landing-page-strategy?projectId=${project._id}&landingPageId=${landingPage._id}`;
+  // Resolve developers (SUPPORT MULTIPLE DEVELOPERS)
+  // Priority: landing page's assignedDevelopers array → legacy assignedDeveloper → project team's developers
+  let developerIds = [];
+  if (landingPage.assignedDevelopers && Array.isArray(landingPage.assignedDevelopers) && landingPage.assignedDevelopers.length > 0) {
+    developerIds = landingPage.assignedDevelopers.map(d => d._id || d);
+  } else if (landingPage.assignedDeveloper) {
+    developerIds = [landingPage.assignedDeveloper._id || landingPage.assignedDeveloper];
+  } else if (project.assignedTeam?.developers && project.assignedTeam.developers.length > 0) {
+    developerIds = project.assignedTeam.developers.map(d => d._id || d);
+  } else if (project.assignedTeam?.developer) {
+    developerIds = [project.assignedTeam.developer._id || project.assignedTeam.developer];
+  }
 
-  // Create design task
-  const designTask = {
-    projectId: project._id,
-    organizationId: project.organizationId,
-    landingPageId: landingPage._id,
-    taskTitle: `Design: ${landingPage.name}`,
-    taskType: 'landing_page_design',
-    assetType: 'landing_page_design',
-    assignedRole: 'ui_ux_designer',
-    assignedTo: uiuxDesignerId,
-    assignedBy: userId,
-    createdBy: userId,
-    status: 'design_pending',
-    strategyContext,
-    contextLink
-  };
+  console.log(`Landing page "${landingPage.name}": ${designerIds.length} designer(s), ${developerIds.length} developer(s), ${testerIds.length} tester(s)`);
 
-  // Create development task — assignedTo is null until design is approved
-  const devTask = {
-    projectId: project._id,
-    organizationId: project.organizationId,
-    landingPageId: landingPage._id,
-    taskTitle: `Develop: ${landingPage.name}`,
-    taskType: 'landing_page_development',
-    assetType: 'landing_page_page',
-    assignedRole: 'developer',
-    assignedTo: null,       // Assigned after design approval
-    developerId: developerId, // Stored for later assignment
-    assignedBy: userId,
-    createdBy: userId,
-    status: 'development_pending',
-    description: 'This task will become active after the design is approved by the tester and marketer.',
-    strategyContext,
-    contextLink
-  };
+  const contextLink = buildUrl(`/landing-page-strategy?projectId=${project._id}&landingPageId=${landingPage._id}`);
 
-  tasks.push(designTask, devTask);
+  // Create design tasks for EACH assigned designer
+  for (const designerId of designerIds) {
+    const designTask = {
+      projectId: project._id,
+      organizationId: project.organizationId,
+      landingPageId: landingPage._id,
+      taskTitle: `Design: ${landingPage.name}`,
+      taskType: 'landing_page_design',
+      assetType: 'landing_page_design',
+      assignedRole: 'ui_ux_designer',
+      assignedTo: designerId,
+      assignedBy: userId,
+      createdBy: userId,
+      status: 'design_pending',
+      landingPageType: lpType,
+      strategyContext: {
+        ...strategyContext,
+        funnelStage: lpType,
+        creativeType: 'landing_page_design',
+        landingPageType: lpType,
+        leadCapture: landingPage.leadCapture || null,
+        leadCaptureMethod: leadCaptureMethod
+      },
+      contextLink,
+      testerIds: testerIds,
+      marketerId: marketerId
+    };
+    tasks.push(designTask);
+    console.log(`Created design task for designer: ${designerId}`);
+  }
+
+  // If no designers assigned, create an unassigned design task
+  if (designerIds.length === 0) {
+    const designTask = {
+      projectId: project._id,
+      organizationId: project.organizationId,
+      landingPageId: landingPage._id,
+      taskTitle: `Design: ${landingPage.name}`,
+      taskType: 'landing_page_design',
+      assetType: 'landing_page_design',
+      assignedRole: 'ui_ux_designer',
+      assignedTo: null,
+      assignedBy: userId,
+      createdBy: userId,
+      status: 'design_pending',
+      landingPageType: lpType,
+      strategyContext: {
+        ...strategyContext,
+        funnelStage: lpType,
+        creativeType: 'landing_page_design',
+        landingPageType: lpType,
+        leadCapture: landingPage.leadCapture || null,
+        leadCaptureMethod: leadCaptureMethod
+      },
+      contextLink,
+      testerIds: testerIds,
+      marketerId: marketerId
+    };
+    tasks.push(designTask);
+    console.log('Created unassigned design task (no designers assigned)');
+  }
+
+  // Create development tasks for EACH assigned developer
+  // Developer is NOT assigned yet - will be assigned when design is approved
+  for (const developerId of developerIds) {
+    const devTask = {
+      projectId: project._id,
+      organizationId: project.organizationId,
+      landingPageId: landingPage._id,
+      taskTitle: `Develop: ${landingPage.name}`,
+      taskType: 'landing_page_development',
+      assetType: 'landing_page_page',
+      assignedRole: 'developer',
+      assignedTo: null,       // Assigned after design approval
+      developerId: developerId, // Stored for later assignment
+      assignedBy: userId,
+      createdBy: userId,
+      status: 'development_pending',
+      description: 'This task will become active after the design is approved by the tester and marketer.',
+      landingPageType: lpType,
+      strategyContext: {
+        ...strategyContext,
+        funnelStage: lpType,
+        creativeType: 'landing_page_development',
+        landingPageType: lpType,
+        leadCapture: landingPage.leadCapture || null,
+        leadCaptureMethod: leadCaptureMethod
+      },
+      contextLink,
+      testerIds: testerIds,
+      marketerId: marketerId
+    };
+    tasks.push(devTask);
+    console.log(`Created development task for developer: ${developerId}`);
+  }
+
+  // If no developers assigned, create an unassigned development task
+  if (developerIds.length === 0) {
+    const devTask = {
+      projectId: project._id,
+      organizationId: project.organizationId,
+      landingPageId: landingPage._id,
+      taskTitle: `Develop: ${landingPage.name}`,
+      taskType: 'landing_page_development',
+      assetType: 'landing_page_page',
+      assignedRole: 'developer',
+      assignedTo: null,
+      assignedBy: userId,
+      createdBy: userId,
+      status: 'development_pending',
+      description: 'This task will become active after the design is approved by the tester and marketer.',
+      landingPageType: lpType,
+      strategyContext: {
+        ...strategyContext,
+        funnelStage: lpType,
+        creativeType: 'landing_page_development',
+        landingPageType: lpType,
+        leadCapture: landingPage.leadCapture || null,
+        leadCaptureMethod: leadCaptureMethod
+      },
+      contextLink,
+      testerIds: testerIds,
+      marketerId: marketerId
+    };
+    tasks.push(devTask);
+    console.log('Created unassigned development task (no developers assigned)');
+  }
 
   const createdTasks = await Task.insertMany(tasks);
 
@@ -561,6 +732,7 @@ const generateLandingPageTasks = async (project, landingPage, userId) => {
     }
   }
 
+  console.log(`Created ${createdTasks.length} tasks for landing page "${landingPage.name}" (${designerIds.length} design tasks, ${developerIds.length} development tasks)`);
   return createdTasks;
 };
 

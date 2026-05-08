@@ -6,6 +6,7 @@ const { completeStage, getStageStatus } = require('../middleware/stageGating');
 const { hasProjectAccess } = require('../utils/auth');
 const { generateTasksFromStrategy, updateCreativePlanTaskAssignments } = require('../services/taskGenerationService');
 const emailService = require('../services/emailService');
+const mongoose = require('mongoose');
 
 const checkProjectAccess = async (projectId, user) => {
   const project = await Project.findOne({
@@ -61,6 +62,7 @@ exports.getCreativeStrategy = async (req, res, next) => {
       .populate('stages.creatives.assignedDesigner', 'name email')
       .populate('stages.creatives.assignedContentWriter', 'name email')
       .populate('creativePlan.assignedTeamMembers', 'name email')
+      .populate('creativePlan.contentWriters', 'name email')
       .populate('creativePlan.contentWriter', 'name email');
 
     if (!creativeStrategy) {
@@ -82,6 +84,7 @@ exports.getCreativeStrategy = async (req, res, next) => {
       ).populate('stages.creatives.assignedDesigner', 'name email')
         .populate('stages.creatives.assignedContentWriter', 'name email')
         .populate('creativePlan.assignedTeamMembers', 'name email')
+        .populate('creativePlan.contentWriters', 'name email')
         .populate('creativePlan.contentWriter', 'name email');
     }
 
@@ -153,6 +156,7 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
           assignedRole: item.assignedRole,
           assignedTeamMembers: item.assignedTeamMembers,
           contentWriter: item.contentWriter,
+          assignedTesters: item.assignedTesters, // Add assignedTesters logging
           platforms: item.platforms,
           screenSizes: item.screenSizes,
           notes: item.notes?.substring(0, 50) + '...'
@@ -209,9 +213,23 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
       assignedRole: item.assignedRole,
       assignedTeamMembers: item.assignedTeamMembers,
       contentWriter: item.contentWriter,
+      assignedTesters: item.assignedTesters, // Add assignedTesters logging
       platforms: item.platforms,
       screenSizes: item.screenSizes
     })));
+
+    // Validate that all creative plan items have testers assigned when completing
+    if (isCompleted && creativePlan && creativePlan.length > 0) {
+      const creativesWithoutTester = creativePlan.filter(item =>
+        !item.assignedTesters || item.assignedTesters.length === 0
+      );
+      if (creativesWithoutTester.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please select a Tester for each creative before completing the strategy'
+        });
+      }
+    }
 
     // Update existing task assignments if creative plan contentWriter changed
     // This ensures tasks get reassigned when the content planner is changed
@@ -272,7 +290,9 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
             objective: item.objective,
             assignedRole: item.assignedRole,
             assignedTeamMembers: item.assignedTeamMembers,
+            contentWriters: item.contentWriters,
             contentWriter: item.contentWriter,
+            assignedTesters: item.assignedTesters,
             platforms: item.platforms,
             screenSizes: item.screenSizes
           });
@@ -891,6 +911,95 @@ exports.updateAdditionalNotes = async (req, res, next) => {
       data: creativeStrategy
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete a creative plan item and its associated tasks
+// @route   DELETE /api/creatives/:projectId/creative-plan/:itemId
+// @access  Private (performance_marketer only)
+exports.deleteCreativePlanItem = async (req, res, next) => {
+  try {
+    const { projectId, itemId } = req.params;
+
+    console.log('\n=== DELETE CREATIVE PLAN ITEM ===');
+    console.log(`Project ID: ${projectId}`);
+    console.log(`Item ID: ${itemId}`);
+    console.log(`Deleted by: ${req.user._id} (${req.user.role})`);
+
+    const { project, error } = await checkProjectAccess(projectId, req.user);
+    if (error) {
+      return res.status(error.status).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    const creativeStrategy = await CreativeStrategy.findOne({ projectId });
+
+    if (!creativeStrategy) {
+      return res.status(404).json({
+        success: false,
+        message: 'Creative strategy not found'
+      });
+    }
+
+    // Find the item in creativePlan array
+    const itemIndex = creativeStrategy.creativePlan.findIndex(
+      item => item._id.toString() === itemId
+    );
+
+    if (itemIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Creative plan item not found'
+      });
+    }
+
+    // Get the item details before deletion for response
+    const deletedItem = creativeStrategy.creativePlan[itemIndex].toObject();
+
+    console.log(`Found item: ${deletedItem.name || 'Unnamed'}`);
+    console.log(`Creative Type: ${deletedItem.creativeType}`);
+    console.log(`Sub Type: ${deletedItem.subType}`);
+
+    // Delete associated tasks
+    const deletedTasks = await Task.deleteMany({
+      projectId: new mongoose.Types.ObjectId(projectId),
+      creativePlanItemId: new mongoose.Types.ObjectId(itemId)
+    });
+
+    console.log(`Deleted ${deletedTasks.deletedCount} associated tasks`);
+
+    // Remove the item from creativePlan
+    creativeStrategy.creativePlan.splice(itemIndex, 1);
+
+    // Recalculate total
+    creativeStrategy.calculateTotal();
+    await creativeStrategy.save();
+
+    console.log('=== CREATIVE PLAN ITEM DELETED ===\n');
+
+    res.status(200).json({
+      success: true,
+      message: 'Creative plan item deleted successfully',
+      data: {
+        deletedItem: {
+          _id: deletedItem._id,
+          name: deletedItem.name,
+          creativeType: deletedItem.creativeType,
+          subType: deletedItem.subType,
+          assignedRole: deletedItem.assignedRole
+        },
+        deletedTasksCount: deletedTasks.deletedCount,
+        creativeStrategy: {
+          ...creativeStrategy.toObject(),
+          completionPercentage: creativeStrategy.calculateCompletion()
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error deleting creative plan item:', error);
     next(error);
   }
 };

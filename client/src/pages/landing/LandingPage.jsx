@@ -753,7 +753,7 @@ function PricingCard({ plan, index, billingCycle, features, onSelect, isHovered,
           <motion.span
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="bg-primary-600 text-white px-4 py-1 rounded-full text-sm font-semibold shadow-lg"
+            className="bg-primary-600 text-white  px-4 py-1 rounded-full text-sm font-semibold shadow-lg"
           >
             Most Popular
           </motion.span>

@@ -12,7 +12,6 @@ import {
   CheckCircle,
   Clock,
   ArrowUpRight,
-  ArrowDownRight,
   Bell,
   MoreHorizontal,
   ChevronRight,
@@ -131,63 +130,32 @@ function RoleIcon({ role, size = 'md', showLabel = false }) {
   );
 }
 
-// Stat Card Component
-function StatCard({ title, value, change, changeType, icon: Icon, iconBg }) {
-  const isPositive = changeType === 'positive';
-  return (
-    <div className="stat-card-enhanced">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <p className="text-sm text-gray-500 font-medium">{title}</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
-          {change && (
-            <div className="flex items-center gap-1 mt-2">
-              {isPositive ? (
-                <ArrowUpRight size={16} className="text-green-500" />
-              ) : (
-                <ArrowDownRight size={16} className="text-red-500" />
-              )}
-              <span className={cn('text-sm font-medium', isPositive ? 'text-green-600' : 'text-red-600')}>
-                {change}
-              </span>
-              <span className="text-xs text-gray-400">vs last month</span>
-            </div>
-          )}
-        </div>
-        <div className={cn('p-3 rounded-2xl', iconBg)}>
-          <Icon size={24} className="text-white" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // Team Member Card — fixed grid layout
 function TeamMemberCard({ member, onClick }) {
   const roleConfig = ROLE_ICONS[member.role] || ROLE_ICONS.admin;
   const Icon = roleConfig.icon;
   return (
     <div onClick={onClick} className="team-member-card-enhanced cursor-pointer">
-      <div className="grid items-center gap-3" style={{ gridTemplateColumns: '48px 1fr auto' }}>
+      <div className="flex items-center gap-2 sm:gap-3">
         <div className="relative flex-shrink-0">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-semibold">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 lg:w-12 lg:h-12 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-semibold text-xs sm:text-sm lg:text-base">
             {member.name?.charAt(0).toUpperCase()}
           </div>
           <div className={cn(
-            'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white',
+            'absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full border-2 border-white',
             AVAILABILITY_COLORS[member.availability] || 'bg-gray-400'
           )} />
         </div>
-        <div className="min-w-0">
-          <h4 className="font-semibold text-gray-900 truncate">{member.name}</h4>
-          <p className="text-sm text-gray-500 truncate">{member.email}</p>
+        <div className="min-w-0 flex-1">
+          <h4 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{member.name}</h4>
+          <p className="text-xs sm:text-sm text-gray-500 truncate">{member.email}</p>
         </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          <div className={cn('p-1.5 rounded-lg', roleConfig.color)}>
-            <Icon size={14} />
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+          <div className={cn('p-1 sm:p-1.5 rounded-lg', roleConfig.color)}>
+            <Icon size={12} className="sm:w-3.5 sm:h-3.5" />
           </div>
           <span className={cn(
-            'text-xs font-medium px-2 py-1 rounded-lg whitespace-nowrap',
+            'text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg whitespace-nowrap',
             ROLE_BADGE_COLORS[member.role] || 'bg-gray-100 text-gray-700'
           )}>
             {ROLE_LABELS[member.role] || member.role}
@@ -195,7 +163,7 @@ function TeamMemberCard({ member, onClick }) {
         </div>
       </div>
       {member.specialization && (
-        <p className="mt-2 text-xs text-gray-400 pl-[60px]">{member.specialization}</p>
+        <p className="mt-1.5 sm:mt-2 text-xs text-gray-400 pl-11 sm:pl-14">{member.specialization}</p>
       )}
     </div>
   );
@@ -206,42 +174,36 @@ function ProjectCard({ project, onClick }) {
   const statusConfig = getProjectStatusConfig(project.status);
   return (
     <div onClick={onClick} className="project-card-enhanced cursor-pointer">
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="font-semibold text-gray-900">{project.projectName || project.businessName}</h3>
-          <p className="text-sm text-gray-500">{project.customerName}</p>
+      <div className="flex items-start justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{project.projectName || project.businessName}</h3>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">{project.customerName}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
           {project.isActive ? (
-            <Badge className="bg-green-100 text-green-700">Active</Badge>
+            <Badge className="bg-green-100 text-green-700 text-xs">Active</Badge>
           ) : (
-            <Badge className="bg-gray-100 text-gray-600">Inactive</Badge>
+            <Badge className="bg-gray-100 text-gray-600 text-xs">Inactive</Badge>
           )}
           <Badge className={cn('text-xs', statusConfig.bgColor, statusConfig.textColor)}>
             {statusConfig.label}
           </Badge>
         </div>
       </div>
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-500">Progress</span>
-          <span className="font-medium text-gray-900">{project.overallProgress}%</span>
-        </div>
-        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{
-              width: `${project.overallProgress}%`,
-              background: project.overallProgress >= 100
-                ? '#10B981'
-                : 'linear-gradient(90deg, #FFC107 0%, #FFD54F 100%)'
-            }}
-          />
-        </div>
+      <div className="h-1.5 sm:h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{
+            width: `${project.overallProgress}%`,
+            background: project.overallProgress >= 100
+              ? '#10B981'
+              : 'linear-gradient(90deg, #FFC107 0%, #FFD54F 100%)'
+          }}
+        />
       </div>
       {project.industry && (
-        <div className="mt-2 pt-2 border-t border-gray-100">
-          <span className="text-xs text-gray-400">Industry: {project.industry}</span>
+        <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-gray-100">
+          <span className="text-xs text-gray-500">Industry: {project.industry}</span>
         </div>
       )}
     </div>
@@ -254,18 +216,18 @@ function ProjectRow({ project, onClick }) {
   return (
     <div
       onClick={onClick}
-      className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-md transition-all duration-200 cursor-pointer"
+      className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-white rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-md transition-all duration-200 cursor-pointer"
     >
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-gray-900 truncate">{project.projectName || project.businessName}</h3>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{project.projectName || project.businessName}</h3>
           {project.isActive ? (
-            <span className="w-2 h-2 bg-emerald-500 rounded-full flex-shrink-0" />
+            <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-emerald-500 rounded-full flex-shrink-0" />
           ) : (
-            <span className="w-2 h-2 bg-gray-400 rounded-full flex-shrink-0" />
+            <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-gray-400 rounded-full flex-shrink-0" />
           )}
         </div>
-        <p className="text-sm text-gray-500 truncate">{project.customerName}</p>
+        <p className="text-xs sm:text-sm text-gray-500 truncate">{project.customerName}</p>
       </div>
       <div className="hidden md:block w-32">
         <span className="text-sm text-gray-600">{project.industry || '-'}</span>
@@ -287,7 +249,6 @@ function ProjectRow({ project, onClick }) {
             }}
           />
         </div>
-        <span className="text-sm font-medium text-gray-900 w-10 text-right">{project.overallProgress}%</span>
       </div>
       <ChevronRight size={18} className="text-gray-400 flex-shrink-0" />
     </div>
@@ -589,7 +550,7 @@ export default function AdminDashboardPage() {
   const teamByRoleData = getTeamByRoleData();
 
   return (
-    <div className="space-y-4 sm:space-y-6 animate-fadeIn">
+    <div className="space-y-4 sm:space-y-5 animate-fadeIn">
       {/* Welcome Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="min-w-0">
@@ -617,58 +578,84 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-        <StatCard
-          title="Total Projects"
-          value={String(stats.totalProjects)}
-          change="+8%"
-          changeType="positive"
-          icon={FolderKanban}
-          iconBg="bg-gradient-to-br from-primary-400 to-primary-600"
-        />
-        <StatCard
-          title="Active Projects"
-          value={String(stats.activeProjects)}
-          change="+12%"
-          changeType="positive"
-          icon={Activity}
-          iconBg="bg-gradient-to-br from-green-400 to-green-600"
-        />
-        <StatCard
-          title="Team Members"
-          value={String(teamStats.total)}
-          icon={Users}
-          iconBg="bg-gradient-to-br from-blue-400 to-blue-600"
-        />
-        <StatCard
-          title="Available Members"
-          value={String(teamStats.available)}
-          icon={CheckCircle}
-          iconBg="bg-gradient-to-br from-purple-400 to-purple-600"
-        />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+        <div className="stat-card-enhanced flex flex-col">
+          <div className="flex items-start justify-between gap-2 sm:gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm text-gray-500 font-medium">Total Projects</p>
+              <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">{String(stats.totalProjects)}</p>
+              <div className="flex items-center gap-1 mt-1 sm:mt-2">
+                <ArrowUpRight size={14} className="text-green-500 sm:w-4 sm:h-4" />
+                <span className="text-xs sm:text-sm font-medium text-green-600">+8%</span>
+                <span className="text-xs text-gray-400 hidden sm:inline">vs last month</span>
+              </div>
+            </div>
+            <div className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl flex-shrink-0 bg-gradient-to-br from-primary-400 to-primary-600">
+              <FolderKanban size={20} className="text-white sm:w-6 sm:h-6" />
+            </div>
+          </div>
+        </div>
+        <div className="stat-card-enhanced flex flex-col">
+          <div className="flex items-start justify-between gap-2 sm:gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm text-gray-500 font-medium">Active Projects</p>
+              <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">{String(stats.activeProjects)}</p>
+              <div className="flex items-center gap-1 mt-1 sm:mt-2">
+                <ArrowUpRight size={14} className="text-green-500 sm:w-4 sm:h-4" />
+                <span className="text-xs sm:text-sm font-medium text-green-600">+12%</span>
+                <span className="text-xs text-gray-400 hidden sm:inline">vs last month</span>
+              </div>
+            </div>
+            <div className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl flex-shrink-0 bg-gradient-to-br from-green-400 to-green-600">
+              <Activity size={20} className="text-white sm:w-6 sm:h-6" />
+            </div>
+          </div>
+        </div>
+        <div className="stat-card-enhanced flex flex-col">
+          <div className="flex items-start justify-between gap-2 sm:gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm text-gray-500 font-medium">Team Members</p>
+              <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">{String(teamStats.total)}</p>
+            </div>
+            <div className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl flex-shrink-0 bg-gradient-to-br from-blue-400 to-blue-600">
+              <Users size={20} className="text-white sm:w-6 sm:h-6" />
+            </div>
+          </div>
+        </div>
+        <div className="stat-card-enhanced flex flex-col">
+          <div className="flex items-start justify-between gap-2 sm:gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm text-gray-500 font-medium">Available Members</p>
+              <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">{String(teamStats.available)}</p>
+            </div>
+            <div className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl flex-shrink-0 bg-gradient-to-br from-purple-400 to-purple-600">
+              <CheckCircle size={20} className="text-white sm:w-6 sm:h-6" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
 
         {/* ── Pie Chart ── */}
-        <div className="lg:col-span-1 chart-container-enhanced">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary-400 to-primary-500">
-              <PieChartIcon size={20} className="text-white" />
+        <div className="lg:col-span-1 chart-container-enhanced h-full flex flex-col">
+          <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 flex-shrink-0">
+            <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-gradient-to-br from-primary-400 to-primary-500">
+              <PieChartIcon size={18} className="text-white sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">Projects overview</h3>
-              <p className="text-sm text-gray-500">Status distribution</p>
+              <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Projects overview</h3>
+              <p className="text-xs sm:text-sm text-gray-500">Status distribution</p>
             </div>
           </div>
 
           {/* Custom legend */}
-          <div className="flex flex-wrap gap-x-4 gap-y-2 mb-4">
+          <div className="flex flex-wrap gap-x-3 sm:gap-x-4 gap-y-1.5 sm:gap-y-2 mb-3 sm:mb-4 flex-shrink-0">
             {taskStatusData.map((item, i) => (
-              <div key={i} className="flex items-center gap-1.5">
+              <div key={i} className="flex items-center gap-1 sm:gap-1.5">
                 <span
-                  className="inline-block w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                  className="inline-block w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-sm flex-shrink-0"
                   style={{ backgroundColor: item.color }}
                 />
                 <span className="text-xs text-gray-500">{item.name}</span>
@@ -678,7 +665,7 @@ export default function AdminDashboardPage() {
           </div>
 
           {taskStatusData.length > 0 ? (
-            <div className="h-52">
+            <div className="flex-1 min-h-[180px] sm:min-h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -710,32 +697,32 @@ export default function AdminDashboardPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-52 flex items-center justify-center text-sm text-gray-400">
+            <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
               No project data
             </div>
           )}
         </div>
 
         {/* ── Bar Chart ── */}
-        <div className="lg:col-span-2 chart-container-enhanced">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-400 to-blue-500">
-                <BarChart3 size={20} className="text-white" />
+        <div className="lg:col-span-2 chart-container-enhanced h-full flex flex-col">
+          <div className="flex items-center justify-between mb-4 sm:mb-6 flex-shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-gradient-to-br from-blue-400 to-blue-500">
+                <BarChart3 size={18} className="text-white sm:w-5 sm:h-5" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900">Team distribution</h3>
-                <p className="text-sm text-gray-500">Members per role</p>
+                <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Team distribution</h3>
+                <p className="text-xs sm:text-sm text-gray-500">Members per role</p>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-gray-900">{teamStats.total}</p>
-              <p className="text-sm text-gray-500">Total members</p>
+            <div className="text-right hidden sm:block">
+              <p className="text-xl sm:text-2xl font-bold text-gray-900">{teamStats.total}</p>
+              <p className="text-xs sm:text-sm text-gray-500">Total members</p>
             </div>
           </div>
 
           {teamByRoleData.length > 0 ? (
-            <div style={{ height: `${Math.max(teamByRoleData.length * 42 + 60, 220)}px` }}>
+            <div className="flex-1 min-h-[180px] sm:min-h-[220px] -ml-2">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={teamByRoleData}
@@ -785,7 +772,7 @@ export default function AdminDashboardPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-sm text-gray-400">
+            <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
               No team data available
             </div>
           )}
@@ -793,56 +780,58 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Projects and Team Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
         {/* Recent Projects */}
         <div className="lg:col-span-2">
-          <div className="chart-container-enhanced">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-6">
+          <div className="chart-container-enhanced h-full flex flex-col relative">
+            {/* View All - Top Right Corner */}
+            <Link
+              to="/dashboard/projects"
+              className="absolute top-4 right-4 sm:top-5 sm:right-5 text-xs sm:text-sm text-primary-600 hover:text-primary-700 font-medium z-10"
+            >
+              View All
+            </Link>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-4 sm:mb-6 flex-shrink-0 pr-16 sm:pr-20">
               <div className="min-w-0">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Recent Projects</h3>
-                <p className="text-sm text-gray-500 mt-1">Latest project activity</p>
+                <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900">Recent Projects</h3>
+                <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">Latest project activity</p>
               </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <div className="flex items-center bg-gray-100 rounded-lg p-1">
-                  <button
-                    onClick={() => setProjectViewMode('card')}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
-                      projectViewMode === 'card'
-                        ? "bg-white text-gray-900 shadow-sm"
-                        : "text-gray-500 hover:text-gray-700"
-                    )}
-                  >
-                    <LayoutGrid size={16} />
-                    <span className="hidden sm:inline">Cards</span>
-                  </button>
-                  <button
-                    onClick={() => setProjectViewMode('list')}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
-                      projectViewMode === 'list'
-                        ? "bg-white text-gray-900 shadow-sm"
-                        : "text-gray-500 hover:text-gray-700"
-                    )}
-                  >
-                    <List size={16} />
-                    <span className="hidden sm:inline">List</span>
-                  </button>
-                </div>
-                <Link to="/dashboard/projects" className="text-sm text-primary-600 hover:text-primary-700 font-medium">
-                  View All
-                </Link>
+              <div className="flex items-center bg-gray-100 rounded-lg p-1 flex-shrink-0">
+                <button
+                  onClick={() => setProjectViewMode('card')}
+                  className={cn(
+                    "flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all",
+                    projectViewMode === 'card'
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  <LayoutGrid size={14} className="sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Cards</span>
+                </button>
+                <button
+                  onClick={() => setProjectViewMode('list')}
+                  className={cn(
+                    "flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all",
+                    projectViewMode === 'list'
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  <List size={14} className="sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">List</span>
+                </button>
               </div>
             </div>
 
             {stats.recentProjects.length === 0 ? (
-              <div className="text-center py-8">
-                <FolderKanban className="w-12 h-12 mx-auto text-gray-300" />
-                <h4 className="mt-2 font-medium text-gray-900">No projects yet</h4>
-                <p className="text-sm text-gray-500 mt-1">Create your first project to get started</p>
+              <div className="text-center py-6 sm:py-8 flex-1 flex flex-col items-center justify-center">
+                <FolderKanban className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300" />
+                <h4 className="mt-2 font-medium text-gray-900 text-sm sm:text-base">No projects yet</h4>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1">Create your first project to get started</p>
               </div>
             ) : projectViewMode === 'card' ? (
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4 flex-1">
                 {stats.recentProjects.slice(0, 5).map((project) => (
                   <ProjectCard
                     key={project._id}
@@ -852,7 +841,7 @@ export default function AdminDashboardPage() {
                 ))}
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 flex-1">
                 {stats.recentProjects.slice(0, 5).map((project) => (
                   <ProjectRow
                     key={project._id}
@@ -866,28 +855,29 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* Team Members */}
-        <div className="chart-container-enhanced">
-          <div className="flex items-center justify-between mb-6">
+        <div className="chart-container-enhanced h-full flex flex-col relative">
+          {/* View All - Top Right Corner */}
+          <button
+            onClick={() => navigate('/dashboard/team')}
+            className="absolute top-4 right-4 sm:top-5 sm:right-5 text-xs sm:text-sm text-primary-600 hover:text-primary-700 font-medium z-10"
+          >
+            View All
+          </button>
+          <div className="flex items-center justify-between mb-4 sm:mb-6 flex-shrink-0 pr-16 sm:pr-20">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Team Members</h3>
-              <p className="text-sm text-gray-500 mt-1">Your team roster</p>
+              <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900">Team Members</h3>
+              <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">Your team roster</p>
             </div>
-            <button
-              onClick={() => navigate('/dashboard/team')}
-              className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-            >
-              View All
-            </button>
           </div>
 
           {teamMembers.length === 0 ? (
-            <div className="text-center py-8">
-              <Users className="w-12 h-12 mx-auto text-gray-300" />
-              <h4 className="mt-2 font-medium text-gray-900">No team members</h4>
-              <p className="text-sm text-gray-500 mt-1">Add team members to get started</p>
+            <div className="text-center py-6 sm:py-8 flex-1 flex flex-col items-center justify-center">
+              <Users className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300" />
+              <h4 className="mt-2 font-medium text-gray-900 text-sm sm:text-base">No team members</h4>
+              <p className="text-xs sm:text-sm text-gray-500 mt-1">Add team members to get started</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3 flex-1">
               {teamMembers.slice(0, 5).map((member) => (
                 <TeamMemberCard
                   key={member._id}
@@ -901,38 +891,38 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
         <button
           onClick={() => navigate('/dashboard/projects/new')}
-          className="p-4 bg-gradient-to-br from-primary-400 to-primary-600 rounded-2xl text-white text-left hover:shadow-lg transition-all duration-200"
+          className="p-3 sm:p-4 lg:p-5 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl sm:rounded-2xl text-white text-left hover:shadow-lg transition-all duration-200 flex flex-col min-h-[100px] sm:min-h-[120px]"
         >
-          <FolderKanban size={24} className="mb-2" />
-          <p className="font-semibold">Create Project</p>
-          <p className="text-sm text-white/80 mt-1">Start a new client project</p>
+          <FolderKanban size={20} className="mb-2 sm:mb-3 flex-shrink-0 sm:w-6 sm:h-6" />
+          <p className="font-semibold text-sm sm:text-base">Create Project</p>
+          <p className="text-xs sm:text-sm text-white/80 mt-0.5 sm:mt-1 line-clamp-2">Start a new client project</p>
         </button>
         <button
           onClick={() => navigate('/dashboard/team')}
-          className="enhanced-card p-4 text-gray-900 text-left"
+          className="enhanced-card p-3 sm:p-4 lg:p-5 text-gray-900 text-left flex flex-col min-h-[100px] sm:min-h-[120px]"
         >
-          <UserPlus size={24} className="mb-2 text-primary-500" />
-          <p className="font-semibold">Add Team Member</p>
-          <p className="text-sm text-gray-500 mt-1">Invite new members</p>
+          <UserPlus size={20} className="mb-2 sm:mb-3 text-primary-500 flex-shrink-0 sm:w-6 sm:h-6" />
+          <p className="font-semibold text-sm sm:text-base">Add Team Member</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1 line-clamp-2">Invite new members</p>
         </button>
         <button
           onClick={() => navigate('/dashboard/rejections')}
-          className="enhanced-card p-4 text-gray-900 text-left"
+          className="enhanced-card p-3 sm:p-4 lg:p-5 text-gray-900 text-left flex flex-col min-h-[100px] sm:min-h-[120px]"
         >
-          <AlertTriangle size={24} className="mb-2 text-orange-500" />
-          <p className="font-semibold">Rejection Tracking</p>
-          <p className="text-sm text-gray-500 mt-1">Monitor task rejections</p>
+          <AlertTriangle size={20} className="mb-2 sm:mb-3 text-orange-500 flex-shrink-0 sm:w-6 sm:h-6" />
+          <p className="font-semibold text-sm sm:text-base">Rejection Tracking</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1 line-clamp-2">Monitor task rejections</p>
         </button>
         <button
           onClick={() => navigate('/dashboard/projects')}
-          className="enhanced-card p-4 text-gray-900 text-left"
+          className="enhanced-card p-3 sm:p-4 lg:p-5 text-gray-900 text-left flex flex-col min-h-[100px] sm:min-h-[120px]"
         >
-          <Briefcase size={24} className="mb-2 text-green-500" />
-          <p className="font-semibold">All Projects</p>
-          <p className="text-sm text-gray-500 mt-1">View and manage projects</p>
+          <Briefcase size={20} className="mb-2 sm:mb-3 text-green-500 flex-shrink-0 sm:w-6 sm:h-6" />
+          <p className="font-semibold text-sm sm:text-base">All Projects</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1 line-clamp-2">View and manage projects</p>
         </button>
       </div>
 

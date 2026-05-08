@@ -340,18 +340,18 @@ export default function ClientsPage() {
                     </div>
                   )}
                   {client.website && (
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Globe className="w-4 h-4 text-gray-400" />
-                      <a
-                        href={client.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary-600 hover:underline truncate"
-                      >
-                        {client.website}
-                      </a>
-                    </div>
-                  )}
+  <div className="flex items-center gap-2 text-gray-600 min-w-0">
+    <Globe className="w-4 h-4 flex-shrink-0 text-gray-400 -mt-5 xl:mt-0 md:-mt-0 truncate" />
+    
+    <a  href={client.website}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-primary-600  hover:underline "
+    >
+      {client.website}
+    </a>
+  </div>
+)}
                   {client.address && (client.address.street || client.address.city || client.address.state || client.address.country || client.address.zipCode) && (
                     <div className="flex items-center gap-2 text-gray-600">
                       <MapPin className="w-4 h-4 text-gray-400" />

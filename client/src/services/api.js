@@ -1,9 +1,13 @@
 import axios from 'axios';
 
+// Get API URL with fallback
+const getApiUrl = () => {
+  return import.meta.env.VITE_API_URL || 'http://localhost:5000';
+};
+
 // Create axios instance
 const api = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL}/api` //|| 'http://localhost:5000/api', // this is backend url
-  ,
+  baseURL: `${getApiUrl()}/api`,
   headers: {
     'Content-Type': 'application/json',
     'Cache-Control': 'no-cache',
@@ -37,10 +41,17 @@ api.interceptors.response.use(
     console.error('API Error:', error.response?.data || error.message);
     const message = error.response?.data?.message || error.message || 'An error occurred';
 
-    // Handle authentication errors
+    // Handle authentication errors (but not on login/register pages)
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+      // Don't redirect if we're already on auth pages (login, register, forgot-password, reset-password)
+      const authPages = ['/login', '/register', '/forgot-password', '/reset-password'];
+      const currentPath = window.location.pathname;
+      const isAuthPage = authPages.some(page => currentPath.startsWith(page));
+
+      if (!isAuthPage) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
     }
 
     return Promise.reject(error.response?.data || { message });
@@ -168,6 +179,9 @@ export const creativeService = {
     api.put(`/creatives/${projectId}/stages/${stage}/creatives/${creativeId}`, data),
   deleteCreative: (projectId, stage, creativeId) =>
     api.delete(`/creatives/${projectId}/stages/${stage}/creatives/${creativeId}`),
+  // Creative Plan Item methods (new system)
+  deleteCreativePlanItem: (projectId, itemId) =>
+    api.delete(`/creatives/${projectId}/creative-plan/${itemId}`),
   // Ad Type methods
   addAdType: (projectId, data) => api.post(`/creatives/${projectId}/ad-types`, data),
   updateAdType: (projectId, typeKey, data) => api.put(`/creatives/${projectId}/ad-types/${typeKey}`, data),
@@ -304,6 +318,11 @@ export const rejectionService = {
   getUserRejectionHistory: (userId, params) => api.get(`/rejections/user/${userId}`, { params }),
   getHighRejectionUsers: (threshold = 3, days = 30) => api.get('/rejections/alerts', { params: { threshold, days } }),
   resolveRejection: (rejectionId) => api.put(`/rejections/${rejectionId}/resolve`),
+};
+
+// Search service
+export const searchService = {
+  globalSearch: (query, type) => api.get('/search', { params: { q: query, type } }),
 };
 
 // Brand Settings service

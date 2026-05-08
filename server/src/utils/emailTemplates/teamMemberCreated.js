@@ -1,4 +1,5 @@
 const baseTemplate = require('./baseTemplate');
+const { buildUrl } = require('../urlHelper');
 
 /**
  * Team Member Created Email Template
@@ -6,45 +7,50 @@ const baseTemplate = require('./baseTemplate');
  */
 
 const teamMemberCreatedTemplate = (user, organization, createdBy, temporaryPassword = null) => {
-  const loginUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/login`;
-  const dashboardUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/dashboard`;
+  const loginUrl = buildUrl('/login');
 
   const content = `
-    <h2>Welcome to ${organization?.name || 'Growth Valley'}!</h2>
-    <p>Hi ${user.name},</p>
-    <p><strong>${createdBy?.name || 'An administrator'}</strong> has added you as a team member to <strong>${organization?.name || 'Growth Valley'}</strong>.</p>
+    <p class="greeting">Dear ${user.name},</p>
+    <p>Welcome to <strong>${organization?.name || 'Growth Valley'}</strong>. We are pleased to have you join our team.</p>
+    <p><strong>${createdBy?.name || 'An administrator'}</strong> has created your account and added you as a team member.</p>
 
-    <div class="details">
-      <div class="details-item">
-        <span class="details-label">Email:</span>
-        <span class="details-value">${user.email}</span>
+    <div class="info-table">
+      <div class="info-table-header">Account Information</div>
+
+      <div class="info-row">
+        <span class="info-label">Email</span>
+        <span class="info-value info-value-highlight">${user.email}</span>
       </div>
+
       ${temporaryPassword ? `
-      <div class="details-item">
-        <span class="details-label">Temporary Password:</span>
-        <span class="details-value" style="font-family: monospace; background: #f1f5f9; padding: 4px 8px; border-radius: 4px;">${temporaryPassword}</span>
+      <div class="info-row">
+        <span class="info-label">Password</span>
+        <span class="info-value" style="font-family: 'Courier New', Consolas, monospace; letter-spacing: 0.5px;">${temporaryPassword}</span>
       </div>
       ` : ''}
     </div>
 
     ${temporaryPassword ? `
-    <p style="background-color: #FEF3C7; padding: 12px; border-radius: 6px; border-left: 4px solid #F59E0B;">
-      <strong>Important:</strong> Please log in using the temporary password above and change it immediately after your first login.
-    </p>
+    <div class="alert alert-warning">
+      <div class="alert-title">Important</div>
+      <p style="margin: 8px 0 0;">Please log in using the temporary password above and change it immediately after your first login to secure your account.</p>
+    </div>
     ` : ''}
 
-    <p style="text-align: center; margin-top: 24px;">
-      <a href="${loginUrl}" class="button">Log In Now</a>
-    </p>
+    <div class="button-wrapper">
+      <a href="${loginUrl}" class="primary-button">Log In</a>
+    </div>
 
-    <p style="margin-top: 20px; font-size: 14px; color: #64748b;">
+    <hr class="divider">
+
+    <p class="text-center text-muted text-small">
       If you have any questions, please contact your team administrator.
     </p>
   `;
 
   return {
-    subject: `Welcome to ${organization?.name || 'Growth Valley'}! - Your Account is Ready`,
-    html: baseTemplate(content, { title: 'Growth Valley' })
+    subject: `Welcome to ${organization?.name || 'Growth Valley'} - Your Account is Ready`,
+    html: baseTemplate(content, { title: 'Account Created' })
   };
 };
 

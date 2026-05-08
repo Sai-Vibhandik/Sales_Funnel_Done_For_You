@@ -198,7 +198,7 @@ export default function CreativeStrategyPage() {
 
       {/* Progress */}
       <Card>
-        <CardBody className="p-4">
+        <CardBody className="p-3 sm:p-4">
           <StageProgressTracker stages={project?.stages} currentStage={project?.currentStage} />
         </CardBody>
       </Card>

@@ -1,4 +1,5 @@
 const baseTemplate = require('./baseTemplate');
+const { buildUrl } = require('../urlHelper');
 
 /**
  * Organization Registration Email Template
@@ -10,50 +11,64 @@ const orgRegistrationTemplate = (organization, owner, plan) => {
   const billingCycle = organization.billingCycle || 'monthly';
 
   const content = `
-    <h2>New Organization Registered</h2>
-    <p>A new organization has been registered on Growth Valley. Here are the details:</p>
+    <p class="greeting">Dear Admin Team,</p>
+    <p>A new organization has been registered on Growth Valley. Please find the details below:</p>
 
-    <div class="details">
-      <div class="details-item">
-        <span class="details-label">Organization:</span>
-        <span class="details-value">${organization.name}</span>
+    <div class="info-table">
+      <div class="info-table-header">Organization Information</div>
+
+      <div class="info-row">
+        <span class="info-label">Organization</span>
+        <span class="info-value info-value-highlight">${organization.name}</span>
       </div>
-      <div class="details-item">
-        <span class="details-label">Slug:</span>
-        <span class="details-value">${organization.slug}</span>
+
+      <div class="info-row">
+        <span class="info-label">Slug</span>
+        <span class="info-value">${organization.slug}</span>
       </div>
-      <div class="details-item">
-        <span class="details-label">Owner:</span>
-        <span class="details-value">${owner.name}</span>
+
+      <div class="info-row">
+        <span class="info-label">Owner Name</span>
+        <span class="info-value">${owner.name}</span>
       </div>
-      <div class="details-item">
-        <span class="details-label">Owner Email:</span>
-        <span class="details-value">${owner.email}</span>
+
+      <div class="info-row">
+        <span class="info-label">Owner Email</span>
+        <span class="info-value">${owner.email}</span>
       </div>
-      <div class="details-item">
-        <span class="details-label">Selected Plan:</span>
-        <span class="details-value">${planName}${billingCycle === 'yearly' ? ' (Yearly)' : ' (Monthly)'}</span>
+
+      <div class="info-row">
+        <span class="info-label">Selected Plan</span>
+        <span class="info-value">${planName}${billingCycle === 'yearly' ? ' (Yearly)' : ' (Monthly)'}</span>
       </div>
-      <div class="details-item">
-        <span class="details-label">Registered:</span>
-        <span class="details-value">${new Date().toLocaleString()}</span>
+
+      <div class="info-row">
+        <span class="info-label">Registered</span>
+        <span class="info-value">${new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
       </div>
+
       ${organization.description ? `
-      <div class="details-item">
-        <span class="details-label">Description:</span>
-        <span class="details-value">${organization.description}</span>
+      <div class="info-row">
+        <span class="info-label">Description</span>
+        <span class="info-value">${organization.description}</span>
       </div>
       ` : ''}
     </div>
 
-    <p style="margin-top: 20px; font-size: 14px; color: #64748b;">
-      You can view more details in the <a href="${process.env.FRONTEND_URL || 'https://growthvalley.com'}/admin" style="color: #4F46E5;">Admin Dashboard</a>.
+    <div class="button-wrapper">
+      <a href="${buildUrl('/admin')}" class="primary-button">View in Admin Dashboard</a>
+    </div>
+
+    <hr class="divider">
+
+    <p class="text-center text-muted text-small">
+      This is an automated notification from the Growth Valley platform.
     </p>
   `;
 
   return {
     subject: `New Organization: ${organization.name} - Growth Valley`,
-    html: baseTemplate(content, { title: 'Growth Valley' })
+    html: baseTemplate(content, { title: 'Organization Registration' })
   };
 };
 

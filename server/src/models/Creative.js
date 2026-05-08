@@ -242,11 +242,21 @@ const creativePlanItemSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
-  // Content Planner assigned to this creative (from project's Content Planners)
+  // Content Planners assigned to this creative (from project's Content Planners) - supports multiple writers
+  contentWriters: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  // Legacy: Content Planner assigned to this creative (single - kept for backward compatibility)
   contentWriter: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
+  // Testers assigned to review this creative (from project's Testers) - supports multiple testers
+  assignedTesters: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   // Ad Intent - what type of ads (e.g., "UGC ads, testimonial ads")
   adIntent: {
     type: String,

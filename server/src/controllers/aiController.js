@@ -201,7 +201,8 @@ exports.generateContentBrief = async (req, res, next) => {
       try {
         // Check if designer has custom overrides
         const hasDesignerOverrides = task.designerBrandOverrides?.colors?.primary?.hex ||
-                                      task.designerBrandOverrides?.typography?.title?.fontFamily;
+                                      task.designerBrandOverrides?.typography?.title?.fontFamily ||
+                                      task.designerBrandOverrides?.brandManualReference?.acknowledged;
 
         if (hasDesignerOverrides) {
           // Use designer's custom overrides
@@ -229,21 +230,62 @@ exports.generateContentBrief = async (req, res, next) => {
             brandParts.push(`Body Font: ${task.designerBrandOverrides.typography.body.fontFamily}`);
           }
 
+          // Add brand manual reference if designer acknowledged it
+          if (task.designerBrandOverrides.brandManualReference?.acknowledged && task.designerBrandOverrides.brandManualReference?.filePath) {
+            brandParts.push(`Brand Manual: ${task.designerBrandOverrides.brandManualReference.filePath}`);
+          }
+
           // Add selected logo
           const selectedLogo = task.designerBrandOverrides.selectedLogo || 'brand';
           if (selectedLogo === 'custom' && task.customLogo?.path) {
             brandParts.push(`Logo: ${task.customLogo.path} (Designer's Custom Logo)`);
+            context.primaryLogo = task.customLogo.path;
           } else {
             // Fetch brand logo
             const brandSettings = await BrandSettings.findOne({ projectId: task.projectId._id });
             if (brandSettings?.logos?.primary?.filePath) {
               brandParts.push(`Logo: ${brandSettings.logos.primary.filePath} (Brand Logo)`);
+              context.primaryLogo = brandSettings.logos.primary.filePath;
+            }
+            if (brandSettings?.logos?.secondary?.filePath) {
+              context.secondaryLogo = brandSettings.logos.secondary.filePath;
             }
           }
 
           if (brandParts.length > 0) {
             context.brandGuidelines = `\nBrand Guidelines (Designer Modified):\n${brandParts.join('\n')}`;
           }
+
+          // Add individual brand asset fields for template placeholders
+          if (task.designerBrandOverrides.brandManualReference?.filePath) {
+            context.brandManualUrl = task.designerBrandOverrides.brandManualReference.filePath;
+          }
+
+          // Format brand colors
+          const colors = [];
+          if (task.designerBrandOverrides.colors?.primary?.hex) {
+            colors.push(`Primary: ${task.designerBrandOverrides.colors.primary.hex}`);
+          }
+          if (task.designerBrandOverrides.colors?.secondary?.hex) {
+            colors.push(`Secondary: ${task.designerBrandOverrides.colors.secondary.hex}`);
+          }
+          if (task.designerBrandOverrides.colors?.tertiary?.hex) {
+            colors.push(`Tertiary: ${task.designerBrandOverrides.colors.tertiary.hex}`);
+          }
+          context.brandColors = colors.join(', ');
+
+          // Format brand typography
+          const typography = [];
+          if (task.designerBrandOverrides.typography?.title?.fontFamily) {
+            typography.push(`Title: ${task.designerBrandOverrides.typography.title.fontFamily}`);
+          }
+          if (task.designerBrandOverrides.typography?.subtitle?.fontFamily) {
+            typography.push(`Subtitle: ${task.designerBrandOverrides.typography.subtitle.fontFamily}`);
+          }
+          if (task.designerBrandOverrides.typography?.body?.fontFamily) {
+            typography.push(`Body: ${task.designerBrandOverrides.typography.body.fontFamily}`);
+          }
+          context.brandTypography = typography.join(', ');
         } else {
           // Use default brand settings
           const brandSettings = await BrandSettings.findOne({ projectId: task.projectId._id });
@@ -296,6 +338,37 @@ exports.generateContentBrief = async (req, res, next) => {
             if (brandParts.length > 0) {
               context.brandGuidelines = `\nBrand Guidelines:\n${brandParts.join('\n')}`;
             }
+
+            // Add individual brand asset fields for template placeholders
+            context.primaryLogo = brandSettings.logos?.primary?.filePath || '';
+            context.secondaryLogo = brandSettings.logos?.secondary?.filePath || '';
+            context.brandManualUrl = brandSettings.brandManual?.filePath || '';
+
+            // Format brand colors
+            const colors = [];
+            if (brandSettings.colors?.primary?.hex) {
+              colors.push(`Primary: ${brandSettings.colors.primary.hex}`);
+            }
+            if (brandSettings.colors?.secondary?.hex) {
+              colors.push(`Secondary: ${brandSettings.colors.secondary.hex}`);
+            }
+            if (brandSettings.colors?.tertiary?.hex) {
+              colors.push(`Tertiary: ${brandSettings.colors.tertiary.hex}`);
+            }
+            context.brandColors = colors.join(', ');
+
+            // Format brand typography
+            const typography = [];
+            if (brandSettings.typography?.title?.fontFamily) {
+              typography.push(`Title: ${brandSettings.typography.title.fontFamily}`);
+            }
+            if (brandSettings.typography?.subtitle?.fontFamily) {
+              typography.push(`Subtitle: ${brandSettings.typography.subtitle.fontFamily}`);
+            }
+            if (brandSettings.typography?.body?.fontFamily) {
+              typography.push(`Body: ${brandSettings.typography.body.fontFamily}`);
+            }
+            context.brandTypography = typography.join(', ');
           }
         }
       } catch (brandError) {
@@ -472,7 +545,8 @@ exports.regenerateContentBrief = async (req, res, next) => {
       try {
         // Check if designer has custom overrides
         const hasDesignerOverrides = task.designerBrandOverrides?.colors?.primary?.hex ||
-                                      task.designerBrandOverrides?.typography?.title?.fontFamily;
+                                      task.designerBrandOverrides?.typography?.title?.fontFamily ||
+                                      task.designerBrandOverrides?.brandManualReference?.acknowledged;
 
         if (hasDesignerOverrides) {
           // Use designer's custom overrides
@@ -500,21 +574,62 @@ exports.regenerateContentBrief = async (req, res, next) => {
             brandParts.push(`Body Font: ${task.designerBrandOverrides.typography.body.fontFamily}`);
           }
 
+          // Add brand manual reference if designer acknowledged it
+          if (task.designerBrandOverrides.brandManualReference?.acknowledged && task.designerBrandOverrides.brandManualReference?.filePath) {
+            brandParts.push(`Brand Manual: ${task.designerBrandOverrides.brandManualReference.filePath}`);
+          }
+
           // Add selected logo
           const selectedLogo = task.designerBrandOverrides.selectedLogo || 'brand';
           if (selectedLogo === 'custom' && task.customLogo?.path) {
             brandParts.push(`Logo: ${task.customLogo.path} (Designer's Custom Logo)`);
+            context.primaryLogo = task.customLogo.path;
           } else {
             // Fetch brand logo
             const brandSettings = await BrandSettings.findOne({ projectId: task.projectId._id });
             if (brandSettings?.logos?.primary?.filePath) {
               brandParts.push(`Logo: ${brandSettings.logos.primary.filePath} (Brand Logo)`);
+              context.primaryLogo = brandSettings.logos.primary.filePath;
+            }
+            if (brandSettings?.logos?.secondary?.filePath) {
+              context.secondaryLogo = brandSettings.logos.secondary.filePath;
             }
           }
 
           if (brandParts.length > 0) {
             context.brandGuidelines = `\nBrand Guidelines (Designer Modified):\n${brandParts.join('\n')}`;
           }
+
+          // Add individual brand asset fields for template placeholders
+          if (task.designerBrandOverrides.brandManualReference?.filePath) {
+            context.brandManualUrl = task.designerBrandOverrides.brandManualReference.filePath;
+          }
+
+          // Format brand colors
+          const colors = [];
+          if (task.designerBrandOverrides.colors?.primary?.hex) {
+            colors.push(`Primary: ${task.designerBrandOverrides.colors.primary.hex}`);
+          }
+          if (task.designerBrandOverrides.colors?.secondary?.hex) {
+            colors.push(`Secondary: ${task.designerBrandOverrides.colors.secondary.hex}`);
+          }
+          if (task.designerBrandOverrides.colors?.tertiary?.hex) {
+            colors.push(`Tertiary: ${task.designerBrandOverrides.colors.tertiary.hex}`);
+          }
+          context.brandColors = colors.join(', ');
+
+          // Format brand typography
+          const typography = [];
+          if (task.designerBrandOverrides.typography?.title?.fontFamily) {
+            typography.push(`Title: ${task.designerBrandOverrides.typography.title.fontFamily}`);
+          }
+          if (task.designerBrandOverrides.typography?.subtitle?.fontFamily) {
+            typography.push(`Subtitle: ${task.designerBrandOverrides.typography.subtitle.fontFamily}`);
+          }
+          if (task.designerBrandOverrides.typography?.body?.fontFamily) {
+            typography.push(`Body: ${task.designerBrandOverrides.typography.body.fontFamily}`);
+          }
+          context.brandTypography = typography.join(', ');
         } else {
           // Use default brand settings
           const brandSettings = await BrandSettings.findOne({ projectId: task.projectId._id });
@@ -567,6 +682,37 @@ exports.regenerateContentBrief = async (req, res, next) => {
             if (brandParts.length > 0) {
               context.brandGuidelines = `\nBrand Guidelines:\n${brandParts.join('\n')}`;
             }
+
+            // Add individual brand asset fields for template placeholders
+            context.primaryLogo = brandSettings.logos?.primary?.filePath || '';
+            context.secondaryLogo = brandSettings.logos?.secondary?.filePath || '';
+            context.brandManualUrl = brandSettings.brandManual?.filePath || '';
+
+            // Format brand colors
+            const colors = [];
+            if (brandSettings.colors?.primary?.hex) {
+              colors.push(`Primary: ${brandSettings.colors.primary.hex}`);
+            }
+            if (brandSettings.colors?.secondary?.hex) {
+              colors.push(`Secondary: ${brandSettings.colors.secondary.hex}`);
+            }
+            if (brandSettings.colors?.tertiary?.hex) {
+              colors.push(`Tertiary: ${brandSettings.colors.tertiary.hex}`);
+            }
+            context.brandColors = colors.join(', ');
+
+            // Format brand typography
+            const typography = [];
+            if (brandSettings.typography?.title?.fontFamily) {
+              typography.push(`Title: ${brandSettings.typography.title.fontFamily}`);
+            }
+            if (brandSettings.typography?.subtitle?.fontFamily) {
+              typography.push(`Subtitle: ${brandSettings.typography.subtitle.fontFamily}`);
+            }
+            if (brandSettings.typography?.body?.fontFamily) {
+              typography.push(`Body: ${brandSettings.typography.body.fontFamily}`);
+            }
+            context.brandTypography = typography.join(', ');
           }
         }
       } catch (brandError) {

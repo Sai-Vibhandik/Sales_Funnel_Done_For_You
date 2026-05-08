@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Button, Input, Card, CardBody } from '@/components/ui';
 import growthValleyLogo from '@/assets/growth-valley-logo.webp';
@@ -15,6 +16,7 @@ const loginSchema = z.object({
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -36,7 +38,7 @@ export default function LoginPage() {
       navigate('/');
     } catch (error) {
       console.error('Login error:', error);
-      toast.error(error.message || 'Login failed. Please check your credentials.');
+      toast.error(error.message || 'Login failed. Please check your credentials.', { duration: 3000 });
     } finally {
       setLoading(false);
     }
@@ -66,13 +68,26 @@ export default function LoginPage() {
                 {...register('email')}
               />
 
-              <Input
-                label="Password"
-                type="password"
-                placeholder="••••••••"
-                error={errors.password?.message}
-                {...register('password')}
-              />
+              <div className="relative">
+                <Input
+                  label="Password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  error={errors.password?.message}
+                  {...register('password')}
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-[34px] text-gray-400 hover:text-gray-600"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
 
               <div className="flex items-center justify-between">
                 <label className="flex items-center">

@@ -142,6 +142,7 @@ export const Select = forwardRef(function Select({
   label,
   error,
   helperText,
+  required,
   options = [],
   placeholder = 'Select...',
   className,
@@ -152,6 +153,7 @@ export const Select = forwardRef(function Select({
       {label && (
         <label className="block text-sm font-medium text-gray-700">
           {label}
+          {required && <span className="text-red-500 ml-1">*</span>}
         </label>
       )}
       <select

@@ -77,7 +77,11 @@ const upload = multer({
   }
 });
 
-// All routes require authentication
+// Serve brand manual file (public access for viewing)
+// This must be before protect middleware to allow public access
+router.get('/:projectId/manual/file', brandSettingsController.serveBrandManual);
+
+// All other routes require authentication
 router.use(protect);
 
 // Get brand settings for a project
