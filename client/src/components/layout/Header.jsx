@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationContext';
-import { Bell, Search, ChevronDown, LogOut, Menu, Loader2, ArrowRight, Folder, CheckSquare, Users, Building2, Mail } from 'lucide-react';
+import { Bell, Search, ChevronDown, LogOut, Menu, Loader2, ArrowRight, Folder, CheckSquare, Users, Building2, Mail, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { searchService } from '@/services/api';

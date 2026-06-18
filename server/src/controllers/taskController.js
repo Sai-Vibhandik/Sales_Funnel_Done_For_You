@@ -1600,12 +1600,41 @@ exports.marketerReview = async (req, res, next) => {
           .populate('assignedTeam.graphicDesigner', '_id name')
           .populate('assignedTeam.videoEditor', '_id name');
 
-        // Determine which role should receive the design task based on creativeOutputType
-        const videoTypes = ['video_creative', 'ugc_content', 'testimonial_content', 'demo_video', 'reel'];
-        const isVideoTask = task.creativeOutputType && videoTypes.includes(task.creativeOutputType);
+        // Step 1: Find the linked design task FIRST (search both types)
+        let designTask = null;
+
+        // Strategy 1: Search by parentTaskId (most reliable link)
+        designTask = await Task.findOne({
+          projectId: task.projectId._id || task.projectId,
+          parentTaskId: task._id,
+          taskType: { $in: ['graphic_design', 'video_editing'] }
+        });
+
+        // Strategy 2: Search by creativeStrategyId if parentTaskId not found
+        if (!designTask && task.creativeStrategyId) {
+          const query = {
+            projectId: task.projectId._id || task.projectId,
+            creativeStrategyId: task.creativeStrategyId,
+            taskType: { $in: ['graphic_design', 'video_editing'] }
+          };
+          if (task.adTypeKey) query.adTypeKey = task.adTypeKey;
+          designTask = await Task.findOne(query);
+        }
+
+        // Strategy 3: Fallback - find any design task for this project with design_pending status
+        if (!designTask) {
+          designTask = await Task.findOne({
+            projectId: task.projectId._id || task.projectId,
+            taskType: { $in: ['graphic_design', 'video_editing'] },
+            status: 'design_pending'
+          });
+        }
+
+        // Step 2: Determine type from the ACTUAL design task found
+        const isVideoTask = designTask?.taskType === 'video_editing';
         const targetRole = isVideoTask ? 'video_editor' : 'graphic_designer';
 
-        // Get team member from project (try array fields first, then legacy fields)
+        // Step 3: Get the correct team member based on actual task type
         let targetTeamMember = null;
         if (isVideoTask) {
           targetTeamMember = project?.assignedTeam?.videoEditors?.[0] || project?.assignedTeam?.videoEditor;
@@ -1613,30 +1642,13 @@ exports.marketerReview = async (req, res, next) => {
           targetTeamMember = project?.assignedTeam?.graphicDesigners?.[0] || project?.assignedTeam?.graphicDesigner;
         }
 
-        // Find the paired design task based on creativeId, adTypeKey, or task title matching
-        let designTaskQuery = {
-          projectId: task.projectId._id || task.projectId,
-          taskType: isVideoTask ? 'video_editing' : 'graphic_design',
-          status: 'design_pending'
-        };
-
-        // Try to find by creativeStrategyId and adTypeKey if available
-        if (task.creativeStrategyId && task.adTypeKey) {
-          designTaskQuery.creativeStrategyId = task.creativeStrategyId;
-          designTaskQuery.adTypeKey = task.adTypeKey;
-        } else if (task.creativeStrategyId) {
-          designTaskQuery.creativeStrategyId = task.creativeStrategyId;
-          // Find matching design task by creativeOutputType or asset type
-          if (isVideoTask) {
-            designTaskQuery.assetType = { $in: ['video_creative', 'ugc_content', 'testimonial_content', 'demo_video'] };
-          } else {
-            designTaskQuery.assetType = { $in: ['image_creative', 'carousel_creative', 'offer_creative'] };
-          }
-        }
-
-        const designTask = await Task.findOne(designTaskQuery);
-
         if (designTask && targetTeamMember) {
+          // Copy the approved content to the design task
+          designTask.contentLink = task.contentLink || null;
+          designTask.contentFile = task.contentFile || null;
+          designTask.contentNotes = task.contentNotes || null;
+          designTask.contentOutput = task.contentOutput || null;
+
           // Update design task status and assignment
           designTask.assignedTo = targetTeamMember._id || targetTeamMember;
           designTask.assignedRole = targetRole;

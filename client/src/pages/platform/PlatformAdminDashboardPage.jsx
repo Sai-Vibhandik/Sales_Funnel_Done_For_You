@@ -57,8 +57,6 @@ const TABS = [
   { id: 'users', label: 'Users', icon: Users },
   { id: 'plans', label: 'Plans', icon: CreditCard },
   { id: 'prompts', label: 'Prompts', icon: FileText },
-  { id: 'sop-library', label: 'SOP Library', icon: BookOpen },
-  { id: 'logs', label: 'Logs', icon: Activity },
 ];
 
 // Role badge colors
@@ -246,12 +244,10 @@ function OverviewTab({ stats, loading, plans }) {
 
   return (
     <div className="space-y-6">
-      {/* CHANGED: grid-cols-2 on mobile, md:grid-cols-4 unchanged */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* CHANGED: grid-cols-2 on mobile, md:grid-cols-2 for 2 cards */}
+      <div className="grid grid-cols-2 md:grid-cols-2 gap-3">
         <StatCard title="Total Users" value={totalUsers} subtitle={`${activeUsers} active`} icon={Users} iconBg="bg-gradient-to-br from-blue-500 to-blue-600" />
         <StatCard title="Organizations" value={totalOrgs} icon={Building2} iconBg="bg-gradient-to-br from-purple-500 to-purple-600" />
-        <StatCard title="Weekly Activity" value={activity} subtitle="actions logged" icon={Activity} iconBg="bg-gradient-to-br from-green-500 to-green-600" />
-        <StatCard title="Platform Health" value="98%" subtitle="uptime" icon={Shield} iconBg="bg-gradient-to-br from-emerald-500 to-emerald-600" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -354,55 +350,6 @@ function OverviewTab({ stats, loading, plans }) {
           </CardBody>
         </Card>
       </div>
-
-      <Card>
-        <CardBody className="p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600">
-              <Layers size={18} className="text-white" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900">Platform Overview</h3>
-              <p className="text-sm text-gray-500">Key metrics at a glance</p>
-            </div>
-          </div>
-          {/* CHANGED: grid-cols-2 on mobile (was md:grid-cols-4 only) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="p-4 rounded-xl bg-blue-50 border border-blue-100">
-              <div className="flex items-center gap-2 mb-2">
-                <Users size={16} className="text-blue-600 flex-shrink-0" />
-                <span className="text-sm text-blue-700 truncate">Total Users</span>
-              </div>
-              <p className="text-2xl font-bold text-blue-900">{totalUsers}</p>
-              <p className="text-xs text-blue-600 mt-1">{activeUsers} active</p>
-            </div>
-            <div className="p-4 rounded-xl bg-purple-50 border border-purple-100">
-              <div className="flex items-center gap-2 mb-2">
-                <Building2 size={16} className="text-purple-600 flex-shrink-0" />
-                <span className="text-sm text-purple-700 truncate">Organizations</span>
-              </div>
-              <p className="text-2xl font-bold text-purple-900">{totalOrgs}</p>
-              <p className="text-xs text-purple-600 mt-1">{orgsByPlanData.reduce((sum, item) => sum + item.value, 0)} total</p>
-            </div>
-            <div className="p-4 rounded-xl bg-green-50 border border-green-100">
-              <div className="flex items-center gap-2 mb-2">
-                <Activity size={16} className="text-green-600 flex-shrink-0" />
-                <span className="text-sm text-green-700 truncate">Weekly Activity</span>
-              </div>
-              <p className="text-2xl font-bold text-green-900">{activity}</p>
-              <p className="text-xs text-green-600 mt-1">actions logged</p>
-            </div>
-            <div className="p-4 rounded-xl bg-amber-50 border border-amber-100">
-              <div className="flex items-center gap-2 mb-2">
-                <Shield size={16} className="text-amber-600 flex-shrink-0" />
-                <span className="text-sm text-amber-700 truncate">Health Status</span>
-              </div>
-              <p className="text-2xl font-bold text-amber-900">98%</p>
-              <p className="text-xs text-amber-600 mt-1">system uptime</p>
-            </div>
-          </div>
-        </CardBody>
-      </Card>
     </div>
   );
 }
@@ -2254,7 +2201,6 @@ export default function PlatformAdminDashboardPage() {
       case 'users': return <UsersTab />;
       case 'plans': return <PlansTab />;
       case 'prompts': return <PromptsTab />;
-      case 'logs': return <LogsTab />;
       default: return null;
     }
   };

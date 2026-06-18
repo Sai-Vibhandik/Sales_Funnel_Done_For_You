@@ -46,8 +46,6 @@ const navigationByRole = {
     { name: 'Users', href: '/dashboard/platform-admin?tab=users', icon: Users },
     { name: 'Plans', href: '/dashboard/platform-admin?tab=plans', icon: CheckSquare },
     { name: 'Prompts', href: '/dashboard/platform-admin?tab=prompts', icon: PenTool },
-    { name: 'SOP Library', href: '/dashboard/platform-admin?tab=sop-library', icon: BookOpen },
-    { name: 'Activity Logs', href: '/dashboard/platform-admin?tab=logs', icon: FileCheck },
   ],
 
   // ADMIN

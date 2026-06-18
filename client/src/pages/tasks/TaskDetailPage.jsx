@@ -46,7 +46,14 @@ const FUNNEL_STAGE_LABELS = {
   conversion: 'Conversion',
   influencer_ads: 'Influencer Ads',
   retargeting: 'Retargeting',
-  engagement: 'Engagement'
+  engagement: 'Engagement',
+  // Landing page types
+  video_sales_letter: 'Video Sales Letter',
+  lead_generation: 'Lead Generation',
+  webinar_registration: 'Webinar Registration',
+  sales_page: 'Sales Page',
+  application_page: 'Application Page',
+  checkout_page: 'Checkout Page'
 };
 
 const CREATIVE_TYPE_LABELS = {
@@ -923,9 +930,9 @@ export default function TaskDetailPage() {
                     Target Platform
                   </label>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {strategyContext.platform && (
+                    {(strategyContext.platform || task.platform) && (
                       <Badge variant="primary" className="text-sm">
-                        {PLATFORM_LABELS[strategyContext.platform] || strategyContext.platform}
+                        {PLATFORM_LABELS[strategyContext.platform || task.platform] || strategyContext.platform || task.platform}
                       </Badge>
                     )}
                     {strategyContext.platforms?.length > 1 && (
@@ -2109,39 +2116,6 @@ Script: (for video) Opening hook..."
                       <p className="text-sm text-gray-700">{task.devNotes}</p>
                     </div>
                   )}
-                </div>
-              </CardBody>
-            </Card>
-          )}
-
-          {/* Previously Submitted Work */}
-          {task.outputFiles?.length > 0 && (
-            <Card>
-              <CardHeader>
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Submitted Files
-                </h2>
-              </CardHeader>
-              <CardBody className="p-6">
-                <div className="flex flex-wrap gap-3">
-                  {task.outputFiles.map((file, index) => (
-                    <a
-                      key={index}
-                      href={file.path}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                    >
-                      {file.path?.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                        <Image className="w-4 h-4" />
-                      ) : file.path?.match(/\.(mp4|mov|avi|webm)$/i) ? (
-                        <Video className="w-4 h-4" />
-                      ) : (
-                        <FileIcon className="w-4 h-4" />
-                      )}
-                      <span className="text-sm font-medium text-gray-700">{file.name}</span>
-                    </a>
-                  ))}
                 </div>
               </CardBody>
             </Card>
