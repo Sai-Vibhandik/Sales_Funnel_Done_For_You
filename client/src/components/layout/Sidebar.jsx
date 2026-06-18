@@ -56,7 +56,6 @@ const navigationByRole = {
     { name: 'Team Management', href: '/dashboard/team', icon: Users },
     { name: 'Billing', href: '/dashboard/billing', icon: CreditCard },
     { name: 'Prompts', href: '/dashboard/prompts', icon: PenTool },
-    { name: 'SOP Library', href: '/dashboard/sop-library', icon: BookOpen },
     // { name: 'Settings', href: '/dashboard/settings', icon: Settings },
   ],
 
