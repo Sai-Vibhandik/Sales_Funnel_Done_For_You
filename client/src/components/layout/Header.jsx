@@ -349,7 +349,7 @@ export default function Header({ onMenuClick }) {
               </div>
             )}
           </div>
-        </div>
+        
 
         {/* Right side */}
         <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
