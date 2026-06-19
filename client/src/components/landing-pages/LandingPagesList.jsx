@@ -33,22 +33,32 @@ export default function LandingPagesList({ projectId, readOnly = false }) {
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
 
-  const getDesignerName = (designerId) => {
-    if (!designerId || !project?.assignedTeam) return 'Not assigned';
+  const getDesignerName = (designer) => {
+    if (!designer) return 'Not assigned';
+    // If already populated with name, return directly
+    if (designer.name) return designer.name;
+    // If it's an ID, look up in project team
+    const designerId = designer._id || designer;
+    if (!project?.assignedTeam) return 'Unknown';
     const designers = project.assignedTeam.uiUxDesigners || [];
     const legacyDesigner = project.assignedTeam.uiUxDesigner;
     const allDesigners = designers.length > 0 ? designers : (legacyDesigner ? [legacyDesigner] : []);
-    const designer = allDesigners.find(d => (d._id || d)?.toString() === designerId?.toString());
-    return designer?.name || 'Unknown';
+    const found = allDesigners.find(d => (d._id || d)?.toString() === designerId?.toString());
+    return found?.name || 'Unknown';
   };
 
-  const getDeveloperName = (developerId) => {
-    if (!developerId || !project?.assignedTeam) return 'Not assigned';
+  const getDeveloperName = (developer) => {
+    if (!developer) return 'Not assigned';
+    // If already populated with name, return directly
+    if (developer.name) return developer.name;
+    // If it's an ID, look up in project team
+    const developerId = developer._id || developer;
+    if (!project?.assignedTeam) return 'Unknown';
     const developers = project.assignedTeam.developers || [];
     const legacyDeveloper = project.assignedTeam.developer;
     const allDevelopers = developers.length > 0 ? developers : (legacyDeveloper ? [legacyDeveloper] : []);
-    const developer = allDevelopers.find(d => (d._id || d)?.toString() === developerId?.toString());
-    return developer?.name || 'Unknown';
+    const found = allDevelopers.find(d => (d._id || d)?.toString() === developerId?.toString());
+    return found?.name || 'Unknown';
   };
 
   useEffect(() => {
